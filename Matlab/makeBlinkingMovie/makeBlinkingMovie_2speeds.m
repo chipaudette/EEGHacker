@@ -1,4 +1,10 @@
-
+% Created: Chip Audette, http://eeghacker.blogspot.com
+% Date: May 2014
+% Purpose: Create movies with two simultaneous blink rates,
+%    one blink rate on the left and another blink rate on
+%    the right.
+% Platform:  Matlab 7.1 on Windows XP
+% License: The MIT License (MIT)
 
 %make black and white frames
 if (1)
