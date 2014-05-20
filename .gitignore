@@ -1,4 +1,7 @@
-.asv
+
+## added by Chip
+*.asv
+*.avi
 
 #################
 ## Eclipse

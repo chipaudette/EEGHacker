@@ -14,7 +14,7 @@ if (1)
     % make the two frames...all black and all white
     width_vs_height = 16/9;
     hblock = 64;
-    wblock = round(hblock*width_vs_height/2);
+    wblock = round(hblock*width_vs_height/3);
     nblock=1;
     npix_w=wblock*nblock;
     npix_h=hblock*nblock;
@@ -40,17 +40,21 @@ switch 3
         overall_toggle_Hz = 60;
         nleft = 3;
         nright = 4;
+        ncenter = 5;
     case 2
         overall_toggle_Hz = 30;
         nleft = 2;
         nright = 3;
+        ncenter = 5;
     case 3
         overall_toggle_Hz = 20;
         nleft = 2;
-        nright = 3;        
+        nright = 3; 
+        ncenter = 5;
 end
 left_toggle_Hz = overall_toggle_Hz/nleft;
 right_toggle_Hz = overall_toggle_Hz/nright;
+center_toggle_Hz = overall_toggle_Hz/ncenter;
 
 %set the movie diration
 if (0)
@@ -67,7 +71,7 @@ nframes = round(desired_duration_sec*overall_toggle_Hz);
 %create the movie
 n_frames = round(overall_toggle_Hz * desired_duration_sec)
 M=[];
-left_state=0;right_state=0;
+left_state=0;right_state=0;center_state = 0;
 for Iswap=1:n_swap
     for I = 1:n_frames
         %change states (ie, change which side the movie is on)
@@ -77,17 +81,21 @@ for Iswap=1:n_swap
         if(rem(I-1,nright)==0);
             right_state = ~right_state;
         end
+        if (rem(I-1,ncenter)==0);
+            center_state = ~center_state;
+        end
 
         %choose which is the left and which is the right image
-        XL = Xblack; XR = Xblack;
+        XL = Xblack; XR = Xblack;XC = Xblack;
         if (left_state), XL = Xwhite;end
         if (right_state), XR = Xwhite; end;
+        if (center_state), XC = Xwhite; end;
 
         %build the composite left+right image
         if (rem(Iswap,2)==1)
-            X = [XL XR];
+            X = [XL XC XR];
         else
-            X = [XR XL];
+            X = [XR XC XL];
         end
 
         %save to movie
@@ -104,10 +112,11 @@ end
 %figure;setFigureTallWide;set(gcf,'DoubleBuffer','on');movie(M,1,desired_rate_Hz*2);
 
 % save movie as AVI
-outpname=['TwoSpeedMovie\'];
+outpname=['ThreeSpeedMovie\'];
 try;mkdir(outpname);catch;end;
 outfname = [outpname 'Block' num2str(nblock) ...
     '_' num2str(left_toggle_Hz,3) 'HzToggle' ...
+    '_' num2str(center_toggle_Hz,3) 'HzToggle' ...
     '_' num2str(right_toggle_Hz,3) 'HzToggle'];
 
 outfname = [outfname '.avi'];
