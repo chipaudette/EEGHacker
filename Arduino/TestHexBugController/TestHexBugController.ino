@@ -1,19 +1,29 @@
 /*
-  Serial Event example
- 
- When new serial data arrives, this sketch adds it to a String.
- When a newline is received, the loop prints the string and 
- clears it.
- 
- A good test for this is to try it with a GPS receiver 
- that sends out NMEA 0183 sentences. 
- 
- Created 9 May 2011
- by Tom Igoe
- 
- This example code is in the public domain.
- 
- http://www.arduino.cc/en/Tutorial/SerialEvent
+  TextHexBugController
+  
+  Created: Chip Audette, May 2014
+  http://eeghacker.blogspot.com
+
+  Purpose: This code assumes that you've hacked the IR remote control of a hex bug
+  to allow the Arduino to "push" the remote control's buttons.  You issue serial commands
+  from the PC, which are received by the Arduino, when then interacts with the remote control.
+  
+  Hex Bug IR Remote: There are four buttons on the Hex Bug IR remote.   The high side of
+  each button attached to the remote control's microcontroller, which must use a pull-up
+  to hold the pin at 3.3V.  The low side of each button is connected to ground so that,
+  when the button is pressed, the pin goes low by conducting through the now-closed button.
+
+  Hack: I soldered a wire to the high side of each button and to the remote's "ground".
+  I connect these wires to the Arduino. 
+  
+  Software Approach: Normally, the Arduino pins are set to "INPUT" because that makes
+  the pins hae a high input impedance, which means that they do not affect the voltage
+  at the pin to the microcontroller.  When I want the Arduino to "push" one of the
+  buttons for me, I command the Arduino to change the pin to "OUTPUT" and "LOW",
+  which gives a low-resistance path to ground.  As a result, it pulls the remote's
+  microcontroller pin low, which makes the remote think that a button was pressed.  
+  
+  License: MIT License 2014
  
  */
 
