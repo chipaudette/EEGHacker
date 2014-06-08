@@ -2,6 +2,8 @@
 ## added by Chip
 *.asv
 *.avi
+*.mov
+openBCI*.txt
 
 #################
 ## Eclipse

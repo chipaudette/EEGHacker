@@ -35,22 +35,22 @@ if (1)
 end
 
 %choose the blinking rate
-switch 3
+switch 2
     case 1
         overall_toggle_Hz = 60;
-        nleft = 3;
+        nleft = 5;
         nright = 4;
-        ncenter = 5;
+        ncenter = 3;
     case 2
         overall_toggle_Hz = 30;
-        nleft = 2;
+        nleft = 5;
         nright = 3;
-        ncenter = 5;
+        ncenter = 2;
     case 3
         overall_toggle_Hz = 20;
-        nleft = 2;
-        nright = 3; 
-        ncenter = 5;
+        nleft = 3;
+        nright = 5; 
+        ncenter = 2;
 end
 left_toggle_Hz = overall_toggle_Hz/nleft;
 right_toggle_Hz = overall_toggle_Hz/nright;
