@@ -2,10 +2,11 @@
 %given_amp_counts = 4.5/2.4e-3;
 
 f_lim = [0 22];
+t_lim=[];
 pname = 'SavedData\';
 
 %fname = 'openBCI_raw_2014-05-08_21-24-31_countbackby3_countbackby41from1200.txt';chans=[1:3];f_lim = [0 100];
-fname = 'openBCI_raw_2014-05-31_20-57-51_RobotControl2.txt'; chans=[2];
+fname = 'openBCI_raw_2014-05-31_20-57-51_RobotControl2.txt'; chans=[2];t_lim = [10 140];
 scale_fac_volts_count=2.23e-8;
 
 
@@ -47,10 +48,10 @@ data_V = filter(b,a,data_V);
 
 %% plot data
 t_sec = ([1:size(data_V,1)]-1)/fs;
-nrow = max([2 size(data_V,2)]); ncol=1;
+nrow = 2; ncol=1;
 ax=[];
 figure;setFigureTallestWidest;
-for Ichan=1:size(data_V,2);
+for Ichan=1:1
 
 %     %time-domain plot
 %     subplotTightBorder(nrow,ncol,(Ichan-1)*2+1);
@@ -70,7 +71,8 @@ for Ichan=1:size(data_V,2);
     %N=1024;
     %N=1200;overlap = 1-1/32;plots=0;
     %N = 2400;overlap = 1-1/64;plots=0; yl=[0 15];
-    N=512;overlap = 1-1/16;plots=0;
+    %N=512;overlap = 1-1/16;plots=0;
+     N=512;overlap = 1-50/N;plots=0;  %this is the overlap in the processing GUI
     [pD,wT,f]=windowedFFTPlot_spectragram(data_V(:,Ichan)*1e6,N,overlap,fs,plots);
     wT = wT + (N/2)/fs;
     
@@ -89,13 +91,74 @@ for Ichan=1:size(data_V,2);
     xlabel('Time (sec)');
     ylabel('Frequency (Hz)');
     title([fname ', Channel ' num2str(Ichan)],'interpreter','none');
-    set(gca,'Clim',+20+[-40 0]+10*log10(256)-10*log10(N));
-    xlim(t_sec([1 end]));
+    set(gca,'Clim',+25+[-40 0]+10*log10(256)-10*log10(N));
+    if ~isempty(t_lim)
+        xlim(t_lim);
+    else
+        xlim(t_sec([1 end]));
+    end
+    xl=xlim;
     ylim(f_lim);
     cl=get(gca,'Clim');
     h=weaText({['Nfft = ' num2str(N) ', fs = ' num2str(fs) ' Hz'];['Clim = [' num2str(round(cl(1))) ' ' num2str(round(cl(2))) '] dB']},1);
     set(h,'BackgroundColor','white');
+    colorbar;
     ax(end+1)=gca;
+    
+    %    %compute SNR
+    inband_Hz = [4 15];
+    Ifreq=find((f >= inband_Hz(1)) & (f <= inband_Hz(2)));
+    [peak_pD,Ipeak]=max(pD(Ifreq,:));
+    ave_noise_pD = zeros(size(peak_pD));
+    %loop and get noise (excluding peak) for each time
+    for Itime=1:length(ave_noise_pD)
+        foo_pD = pD(Ifreq,Itime);
+        foo_pD(Ipeak(Itime)) = NaN;
+        if (Ipeak(Itime) > 1);foo_pD(Ipeak(Itime)-1) = NaN;end;
+        if (Ipeak(Itime) < length(foo_pD)); foo_pD(Ipeak(Itime)+1) = NaN;end;
+        ave_noise_pD(Itime) = nanmean(foo_pD);
+    end
+    peak_freq_Hz = f(Ifreq(Ipeak));
+    snr_dB = 10*log10(pD ./ (ones(size(pD,1),1)*ave_noise_pD));
+    peak_SNR_dB = zeros(size(peak_freq_Hz));
+    for Itime=1:length(peak_SNR_dB);
+        peak_SNR_dB(Itime) = snr_dB(Ifreq(Ipeak(Itime)),Itime);
+    end
+    t_snr_sec = wT;
+    
+    %continue plotting
+    subplotTightBorder(nrow,ncol,Ichan+1);
+    imagesc(wT,f,snr_dB);
+    set(gca,'Ydir','normal');
+    xlabel('Time (sec)');
+    ylabel('Frequency (Hz)');
+    title([fname ', Channel ' num2str(Ichan)],'interpreter','none');
+    set(gca,'Clim',[-10 10]);
+    xlim(xl);
+    ylim(f_lim);
+    cl=get(gca,'Clim');
+    h=weaText({['Nfft = ' num2str(N) ', fs = ' num2str(fs) ' Hz'];['Clim = [' num2str(round(cl(1))) ' ' num2str(round(cl(2))) '] dB']},1);
+    set(h,'BackgroundColor','white');
+    
+    det_thresh_dB = 6;
+    I=find(peak_SNR_dB > det_thresh_dB);
+    hold on; plot(t_snr_sec(I),peak_freq_Hz(I),'wo','linewidth',2); hold off;
+    
+    freq_bounds = [4 6.5 9 12 15];
+    for Ibound=1:length(freq_bounds);
+        hold on;
+        plot(xlim,freq_bounds(Ibound)*[1 1],'w:');
+        hold off;
+    end
+    
+%     hold on;
+%     plot(xlim,inband_Hz(1)*[1 1],'w--','linewidth',2);
+%     plot(xlim,inband_Hz(2)*[1 1],'w--','linewidth',2);
+%     hold off
+    colorbar;
+    ax(end+1)=gca;
+
+    
 end
 
-linkaxes(ax,'x');
+linkaxes(ax);
