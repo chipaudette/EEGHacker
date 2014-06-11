@@ -4,16 +4,9 @@
 f_lim = [0 25];
 pname = 'SavedData\';
 
-fname = 'openBCI_raw_2014-05-08_20-26-47_EyesClosedSeperates_Left_Right_Left_Right_Both.txt';nchan=3;
-%fname = 'openBCI_raw_2014-05-08_20-37-56_1block_fullscreenblink_15secSegments.txt';nhcan=3;
-%fname = 'openBCI_raw_2014-05-08_20-45-00_Block1_10HzToggle_6.67HzToggle.txt';nchan=3;
-%fname = 'openBCI_raw_2014-05-08_20-47-30_Block1_20HzToggle_15HzToggle.txt';nchan=3;
-%fname = 'openBCI_raw_2014-05-08_20-50-15_Block1_10HzToggle_3.33HzToggle.txt';nchan=3;
-%fname = 'openBCI_raw_2014-05-08_20-52-43_Block1_15HzToggle_10HzToggle.txt';nchan=3;  %best?
-%fname = 'openBCI_raw_2014-05-08_21-03-08_Block1_15HzToggle_10HzToggle_wAux.txt';nchan=3;  %best?
-%fname = 'openBCI_raw_2014-05-08_21-08-33_Block1_10HzToggle_6.67HzToggle_wAux.txt';nchan=3;
-%fname = 'openBCI_raw_2014-05-08_21-12-01_Block1_15HzToggle_10HzToggle_followFastOne.txt'; nchan=3;
-fname = 'openBCI_raw_2014-05-08_21-24-31_countbackby3_countbackby41from1200.txt';nchan=3;f_lim = [0 100];
+
+fname = 'openBCI_raw_2014-05-08_20-52-43_Block1_15HzToggle_10HzToggle.txt'; nchan=3;
+%fname = 'openBCI_raw_2014-05-08_21-24-31_countbackby3_countbackby41from1200.txt';nchan=3;f_lim = [0 100];
 scale_fac_volts_count=2.23e-8;
 
 
@@ -80,7 +73,6 @@ for Ichan=1:size(data_V,2);
     %N = 2400;overlap = 1-1/64;plots=0; yl=[0 15];
     N=512;overlap = 1-1/16;plots=0;
     %yl=[0 fs/2];
-    ylim(f_lim);
     [pD,wT,f]=windowedFFTPlot_spectragram(data_V(:,Ichan)*1e6,N,overlap,fs,plots);
     wT = wT + (N/2)/fs;
     
@@ -93,6 +85,7 @@ for Ichan=1:size(data_V,2);
     set(gca,'Ydir','normal');
     xlabel('Time (sec)');
     ylabel('Frequency (Hz)');
+    ylim(f_lim);
     title([fname ', Channel ' num2str(Ichan)],'interpreter','none');
     set(gca,'Clim',+20+[-40 0]+10*log10(256)-10*log10(N));
     xlim(t_sec([1 end]));
