@@ -219,7 +219,7 @@ for Itype = 1:3
 end
 
 %process each time slice
-det_freq_bounds = [[freq_bounds(1:end-1)'; 15-1.5] [freq_bounds(2:end)';  15+1.5]];
+det_freq_bounds = [[freq_bounds(1:end-1)'; 15-1.5; 20-2] [freq_bounds(2:end)';  15+1.5; 20+2]];
 peak_SNR_per_band_dB = NaN*ones(length(wT),size(det_freq_bounds,1));
 for Iband=1:size(det_freq_bounds,1);
     Ifreq=find((f>=det_freq_bounds(Iband,1)) & (f<=det_freq_bounds(Iband,2)));
@@ -274,7 +274,7 @@ xlabel('Time (sec)');
 ylabel('SNR (dB)');
 ylim([-3 12]);set(gca,'YTick',[-3:3:12]);
 xlim(t_lim);
-legend('Band 1','Band 2','Band 3','Band 4',2);
+legend('Band 1','Band 2','Band 3','Band 4','Band 5',2);
 
 subplot(3,1,3);
 plot(wT,truth_perSlice,'o','linewidth',2);
@@ -306,7 +306,8 @@ ncol=4;
 Iplot=0;
 c = [0.25 0.25 0.25; 0 0 1; 0 0.5 0; 1 0 0;];
 sym = 'xooo';
-loc = [1 5 9 2 6 10 3 7 11 4 8 12];
+%loc = [1 ncol+1 2*ncol+1 3*ncol+1 2 ncol+2 2*ncol+2 3*ncol+2 3 ncol+3 2*ncol+3 3*ncol+3 4 ncol+4 2*ncol+4 3*ncol+4 5 ncol+5 2*ncol+5 3*ncol+5 ];
+loc = [1 ncol+1 2*ncol+1 2 ncol+2 2*ncol+2 3 ncol+3 2*ncol+3 4 ncol+4 2*ncol+4 ];
 for Icompare=1:4
     for Jcompare = 1:4
         if Icompare ~= Jcompare
