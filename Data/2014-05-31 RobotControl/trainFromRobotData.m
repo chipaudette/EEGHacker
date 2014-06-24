@@ -27,7 +27,7 @@ switch 5
             106	109	1
             114	119	3
             121	122	2];  %start time, end time, action code...1 = left, 2  = right, 3 = fwd
-        truth_start_sec = 16.22;
+        truth_start_sec = 16.22;a
         intended = [27 34 1
             36  51  1
             56  62  2
@@ -36,7 +36,7 @@ switch 5
             87  94  3
             100 109 1
             112 119 3];
-         intended(:,1:2) = intended(:,1:2)+1;
+        intended(:,1:2) = intended(:,1:2)+1;
     case 9
         fname = 'openBCI_raw_2014-05-31_21-07-40_Robot09.txt'; chans=2;
     case 11
@@ -79,23 +79,7 @@ data_V = data_V - ones(size(data_V,1),1)*mean(data_V);
 data_V = filter(b,a,data_V);
 [b,a]=butter(3,[55 65]/(fs/2),'stop');
 data_V = filter(b,a,data_V);
-% [b,a]=butter(3,[65 75]/(fs/2),'stop');
-% data_V = filter(b,a,data_V);
 
-%% write to WAV
-% fs_dec = fs;foo_V = data_V;
-% %foo_V = resample(data_V,1,2); fs_dec = fs / 2;  %decimate
-% outfname = ['WAVs\' fname(1:end-4) '.wav'];
-% disp(['writing to ' outfname]);
-% wavwrite(foo_V(:,1:min([size(data_V,2) 2]))*1e6/500,fs_dec,16,outfname);
-
-
-%% analyze data
-% mean_data_V = mean(data_V);
-% median_data_V = median(data_V);
-% std_data_V = std(data_V);
-% spread_data_V = diff(xpercentile(data_V,0.5+(0.68-0.5)*[-1 1]))/2;
-% spread_data_V = median(spread_data_V)*ones(size(spread_data_V));
 
 %% plot data
 t_sec = ([1:size(data_V,1)]-1)/fs;
@@ -104,25 +88,8 @@ ax=[];
 figure;setFigureTallestWide;
 for Ichan=1:1
     
-    %     %time-domain plot
-    %     subplotTightBorder(nrow,ncol,(Ichan-1)*2+1);
-    %     plot(t_sec,data_V(:,Ichan)*1e6);
-    %     xlim(t_sec([1 end]));
-    %     %ylim(1e6*(median_data_V(Ichan)+3*[-1 1]*spread_data_V(Ichan)));
-    %     ylim([-200 200]);
-    %     weaText({['Mean = ' num2str(mean(data_V(:,Ichan))*1e6,3) ' uV'];
-    %         ['Std = ' num2str(std(data_V(:,Ichan))*1e6,3) ' uV']},2);
-    %     title(['Channel ' num2str(Ichan)]);
-    %     xlabel(['Time (sec)']);
-    %     ylabel(['Signal (uV)']);
-    %     ax(end+1)=gca;
-    
     %spectrogram
     subplot(nrow,ncol,Ichan);
-    %N=1024;
-    %N=1200;overlap = 1-1/32;plots=0;
-    %N = 2400;overlap = 1-1/64;plots=0; yl=[0 15];
-    %N=512;overlap = 1-1/16;plots=0;
     N=512;overlap = 1-50/N;plots=0;  %this is the overlap in the processing GUI
     [pD,wT,f]=windowedFFTPlot_spectragram(data_V(:,Ichan)*1e6,N,overlap,fs,plots);
     wT = wT + (N/2)/fs;
@@ -160,12 +127,6 @@ for Ichan=1:1
     set(h,'BackgroundColor','white');
     colorbar;
     clabel(['uV/sqrt(Hz) (dB)']);
-    
-%     hold on;
-%     plot(xlim,inband_Hz(1)*[1 1],'w--','linewidth',2);
-%     plot(xlim,inband_Hz(2)*[1 1],'w--','linewidth',2);
-%     hold off
-    
     ax(end+1)=gca;
     
     %    %compute SNR
@@ -192,17 +153,8 @@ for Ichan=1:1
     %continue plotting
     for Iplot=1:2
         subplot(nrow,ncol,Ichan+Iplot);
-%         if Iplot==1
-            foo_dB = snr_dB;
-%         else
-%             foo_dB = snr_dB;
-%             I = find(foo_dB<det_thresh_dB);
-%             foo_dB(I) = -10;
-%             I = find((f < inband_Hz(1)) | (f > inband_Hz(2)));
-%             foo_dB(I,:) = -10;
-%             %I = find(foo>=det_thresh_dB)
-%             %foo(I)
-%         end
+        foo_dB = snr_dB;
+        
         imagesc(wT,f,foo_dB);
         set(gca,'Ydir','normal');
         xlabel('Time (sec)');
@@ -217,13 +169,13 @@ for Ichan=1:1
         h = weaText(txt,2);
         set(h,'BackgroundColor','white');
         clabel(['SNR (dB)']);
-
+        
         
         det_thresh_dB = 6;
         I=find(peak_SNR_dB > det_thresh_dB);
         if (Iplot==2)
             hold on; plot(t_snr_sec(I),peak_freq_Hz(I),'wo','linewidth',2); hold off;
-           
+            
             %freq_bounds = [4 6.5 9 12 15];
             freq_bounds = [4 6.5 9 12];
             for Ibound=1:length(freq_bounds);
@@ -231,7 +183,7 @@ for Ichan=1:1
                 plot(xlim,freq_bounds(Ibound)*[1 1],'w--','linewidth',2);
                 hold off;
             end
- 
+            
             %add truth bounds
             truth_to_freq_code = [2 1 3];
             for Itruth=1:size(truth_sec,1)
@@ -241,11 +193,146 @@ for Ichan=1:1
                 plot(truth_sec(Itruth,2)*[1 1],y,'k:','linewidth',2);
                 hold off;
             end
- 
+            
             
         end
         ax(end+1)=gca;
     end
-end    
+end
 linkaxes(ax);
+
+%% get SNR spectrum per time region
+SNR_spectra = {};
+median_SNR_dB = [];
+std_SNR_dB=[];
+for Itype = 1:3
+    all_SNR_dB=[];%clear
+    for Itruth=1:size(truth_sec,1)
+        if (truth_code(Itruth) == Itype)
+            Itime=find((wT >= truth_sec(Itruth,1)) & (wT <= truth_sec(Itruth,2)));
+            all_SNR_dB = [all_SNR_dB snr_dB(:,Itime)];
+        end
+    end
+    SNR_spectra{Itype} = all_SNR_dB;
+    median_SNR_dB(:,Itype) = mean(all_SNR_dB')';
+    std_SNR_dB(:,Itype) = std(all_SNR_dB')';
+end
+
+%process each time slice
+det_freq_bounds = [[freq_bounds(1:end-1)'; 15-1.5] [freq_bounds(2:end)';  15+1.5]];
+peak_SNR_per_band_dB = NaN*ones(length(wT),size(det_freq_bounds,1));
+for Iband=1:size(det_freq_bounds,1);
+    Ifreq=find((f>=det_freq_bounds(Iband,1)) & (f<=det_freq_bounds(Iband,2)));
+    for Itime=1:length(wT)
+        peak_SNR_per_band_dB(Itime,Iband) = max(snr_dB(Ifreq,Itime));
+    end
+end
+
+%define truth of each time slice
+truth_perSlice=zeros*ones(size(wT));
+I=find(wT < truth_sec(1,1)-3);
+truth_perSlice(I) = NaN;  %ignore
+for Itruth=1:length(truth_code)
+    %find time slices that precede the window
+    I=find((wT >= truth_sec(Itruth,1)-1) & (wT <= truth_sec(Itruth,1)));
+    truth_perSlice(I) = NaN;  %ignore
+    
+    %find time slices that are within the window
+    I=find((wT >= truth_sec(Itruth,1)) & (wT <= truth_sec(Itruth,2)));
+    truth_perSlice(I) = truth_code(Itruth);
+    
+    %find the time slices that just follow the window
+    I=find((wT > truth_sec(Itruth,2)) & (wT <= (truth_sec(Itruth,2)+1.5)));
+    truth_perSlice(I) = NaN;  %igore all of these points
+end
+I=find(wT > truth_sec(end,2));
+truth_perSlice(I) = NaN;  %ignore
+
+
+%% plot the spectrum analysis
+figure;setFigureTallerWide;
+for Iplot=1:2
+    subplot(3,2,Iplot);
+    plot(f,median_SNR_dB,'linewidth',2);
+    legend('Left','Right','Forward');
+    xlim([0 22]);
+    ylim([-3 12]);set(gca,'YTick',[-3:3:12]);
+    %hold on;plot(xlim,[0 0],'k--','linewidth',2);
+    ylabel(['Mean of dB SNR']);
+    if (Iplot==2)
+        hold on;
+        for Ibound=1:length(freq_bounds);
+            plot(freq_bounds(Ibound)*[1 1],ylim,'k--','linewidth',2);
+        end
+        hold off;
+    end
+end
+
+subplot(3,1,2);
+plot(wT,peak_SNR_per_band_dB,'linewidth',2);
+xlabel('Time (sec)');
+ylabel('SNR (dB)');
+ylim([-3 12]);set(gca,'YTick',[-3:3:12]);
+xlim(t_lim);
+legend('Band 1','Band 2','Band 3','Band 4',2);
+
+subplot(3,1,3);
+plot(wT,truth_perSlice,'o','linewidth',2);
+set(gca,'YTick',[0 1 2 3],'YTickLabel',{'None','Left','Right','Forward'});
+ylim([0 3]+[-1 1]);
+xlim(t_lim);
+ylabel('Truth Code');
+xlabel('Time (sec)');
+
+for Iplot=2:3
+    subplot(3,1,Iplot);
+    hold on;
+    txt=['LRF'];
+    for Itruth=1:size(truth_sec,1)
+        plot(truth_sec(Itruth,1)*[1 1],ylim,'k:','linewidth',2);
+        plot(truth_sec(Itruth,2)*[1 1],ylim,'k:','linewidth',2);
+        yl=ylim;
+        text(mean(truth_sec(Itruth,:)),yl(2)-0.05*diff(yl),txt(truth_code(Itruth)),...
+            'HorizontalAlignment','Center','VerticalAlignment','Top',...
+            'BackgroundColor','white','FontWeight','Bold');
+    end
+    hold off
+end
+
+%% comparison of metrics
+figure;setFigureTallestWidest;
+nrow=3;
+ncol=4;
+Iplot=0;
+c = [0.25 0.25 0.25; 0 0 1; 0 0.5 0; 1 0 0;];
+sym = 'xooo';
+loc = [1 5 9 2 6 10 3 7 11 4 8 12];
+for Icompare=1:4
+    for Jcompare = 1:4
+        if Icompare ~= Jcompare
+            Iplot=Iplot+1;
+            subplotTightBorder(nrow,ncol,loc(Iplot));
+            for Itype=0:3
+                I=find(truth_perSlice==Itype);
+                hold on;
+                x = peak_SNR_per_band_dB(I,Icompare);
+                y = peak_SNR_per_band_dB(I,Jcompare);
+                h=plot(x,y,sym(Itype+1),'linewidth',2,'Color',c(Itype+1,:));
+                if (Itype==0)
+                    set(h,'MarkerSize',8,'linewidth',3);
+                end
+            end
+            axis equal;
+            axis square;
+            xlim([-3 10]);ylim(xlim);
+            set(gca,'Xtick',[-3:3:12]);
+            set(gca,'Ytick',[-3:3:12]);
+            
+            xlabel(['Band ' num2str(Icompare)]);
+            ylabel(['Band ' num2str(Jcompare)]);
+            box on
+            if (Iplot==1);legend('Noise','Left','Right','Forward',1);end
+        end
+    end
+end
 
