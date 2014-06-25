@@ -476,7 +476,7 @@ for Iplot=2:3
     xlim(t_lim);
     ylabel('Action');
     xlabel('Time (sec)');
-    title(['New Detection Rules']);
+    title(tt);
     
     
     hold on;
