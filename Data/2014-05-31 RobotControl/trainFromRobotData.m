@@ -27,7 +27,7 @@ switch 5
             106	109	1
             114	119	3
             121	122	2];  %start time, end time, action code...1 = left, 2  = right, 3 = fwd
-        truth_start_sec = 16.22;a
+        truth_start_sec = 16.22;
         intended = [27 34 1
             36  51  1
             56  62  2
@@ -88,9 +88,14 @@ ax=[];
 figure;setFigureTallestWide;
 for Ichan=1:1
     
+    %define settings
+    N=512;overlap = 1-50/N;smooth_fac=0.9; %as done in first movie
+    %N=512/2;overlap = 1-50/N;smooth_fac=0.9; %smaller N for faster response
+    %N=512;overlap = 1-50/N;smooth_fac=0.825; %shorter smoothing for faster response
+    
     %spectrogram
     subplot(nrow,ncol,Ichan);
-    N=512;overlap = 1-50/N;plots=0;  %this is the overlap in the processing GUI
+    plots=0;  %this is the overlap in the processing GUI
     [pD,wT,f]=windowedFFTPlot_spectragram(data_V(:,Ichan)*1e6,N,overlap,fs,plots);
     wT = wT + (N/2)/fs;
     
@@ -98,7 +103,6 @@ for Ichan=1:1
     smooth_txt=[];
     if (1)
         pD_dB = 10*log10(pD);
-        smooth_fac = 0.9;
         smooth_txt = ['Smooth Fac: ' num2str(smooth_fac)];
         b = 1-smooth_fac; a = [1 -smooth_fac];
         pD_dB = filter(b,a,pD_dB')';  %transpose to smooth across columns
@@ -219,7 +223,7 @@ for Itype = 1:3
 end
 
 %process each time slice
-det_freq_bounds = [[freq_bounds(1:end-1)'; 15-1.5; 20-2] [freq_bounds(2:end)';  15+1.5; 20+2]];
+det_freq_bounds = [[freq_bounds(1:end-1)'; 15-1.5] [freq_bounds(2:end)';  15+1.5]];
 peak_SNR_per_band_dB = NaN*ones(length(wT),size(det_freq_bounds,1));
 for Iband=1:size(det_freq_bounds,1);
     Ifreq=find((f>=det_freq_bounds(Iband,1)) & (f<=det_freq_bounds(Iband,2)));
@@ -274,7 +278,8 @@ xlabel('Time (sec)');
 ylabel('SNR (dB)');
 ylim([-3 12]);set(gca,'YTick',[-3:3:12]);
 xlim(t_lim);
-legend('Band 1','Band 2','Band 3','Band 4','Band 5',2);
+%legend('Band 1','Band 2','Band 3','Band 4','Band 5',2);
+legend('Band A','Band B','Band C','Band D',2);
 
 subplot(3,1,3);
 plot(wT,truth_perSlice,'o','linewidth',2);
@@ -300,40 +305,189 @@ for Iplot=2:3
 end
 
 %% comparison of metrics
-figure;setFigureTallestWidest;
+figure;setFigureTallerWide;
+%set(gcf,'position',[400         258        1256         840]);
 nrow=3;
-ncol=4;
+ncol=3;
 Iplot=0;
 c = [0.25 0.25 0.25; 0 0 1; 0 0.5 0; 1 0 0;];
-sym = 'xooo';
 %loc = [1 ncol+1 2*ncol+1 3*ncol+1 2 ncol+2 2*ncol+2 3*ncol+2 3 ncol+3 2*ncol+3 3*ncol+3 4 ncol+4 2*ncol+4 3*ncol+4 5 ncol+5 2*ncol+5 3*ncol+5 ];
 loc = [1 ncol+1 2*ncol+1 2 ncol+2 2*ncol+2 3 ncol+3 2*ncol+3 4 ncol+4 2*ncol+4 ];
-for Icompare=1:4
+loc = [1:9];
+for Icompare=[2 1 3]
     for Jcompare = 1:4
         if Icompare ~= Jcompare
             Iplot=Iplot+1;
-            subplotTightBorder(nrow,ncol,loc(Iplot));
+            subplot(nrow,ncol,loc(Iplot));
             for Itype=0:3
                 I=find(truth_perSlice==Itype);
                 hold on;
                 x = peak_SNR_per_band_dB(I,Icompare);
                 y = peak_SNR_per_band_dB(I,Jcompare);
-                h=plot(x,y,sym(Itype+1),'linewidth',2,'Color',c(Itype+1,:));
-                if (Itype==0)
-                    set(h,'MarkerSize',8,'linewidth',3);
+                sym = 'x'; if (Itype>0); if (Icompare==truth_to_freq_code(Itype)); sym = 'o'; end;end
+                h=plot(x,y,sym,'linewidth',2,'Color',c(Itype+1,:));
+                if (Itype>0); 
+                    if (Icompare==truth_to_freq_code(Itype));
+                       % set(h,'MarkerFaceColor',get(h,'Color'));  %make solid fill
+                    end;
                 end
+                %if (Itype==0)
+                %    set(h,'MarkerSize',8,'linewidth',1);
+                %end
             end
             axis equal;
             axis square;
-            xlim([-3 10]);ylim(xlim);
+            xlim([0 12]);
+            ylim([-3 9]);
             set(gca,'Xtick',[-3:3:12]);
             set(gca,'Ytick',[-3:3:12]);
-            
-            xlabel(['Band ' num2str(Icompare)]);
-            ylabel(['Band ' num2str(Jcompare)]);
+            txt2='ABCD';
+            xlabel({'Peak SNR (dB)';['Band ' txt2(Icompare) ' (' num2str(det_freq_bounds(Icompare,1)) '-' num2str(det_freq_bounds(Icompare,2)) ' Hz)']});
+            ylabel({'Peak SNR (dB)';['Band ' txt2(Jcompare) ' (' num2str(det_freq_bounds(Jcompare,1)) '-' num2str(det_freq_bounds(Jcompare,2)) ' Hz)']});
+            txt3 = {'Left' 'Right' 'Forward'};
+            title(['Detecting "' txt3{truth_to_freq_code(Icompare)} '" Command']);
             box on
-            if (Iplot==1);legend('Noise','Left','Right','Forward',1);end
+            %if (Iplot==1);
+            if (rem(Iplot,3)==0)
+                h=legend({'Noise' txt3{:}});
+                moveLegendToSide(h);
+            end
+            
+            hold on; plot(det_thresh_dB*[1 1],ylim,'k--','linewidth',2);hold off
+            
+            %plot special additions
+            if Iplot==3
+                %add special for Band B and D on "Left" command
+                x = xlim; x = [x(1):0.1:x(2)];
+                y = zeros(size(x));
+                I=find(x < det_thresh_dB);
+                y(I) = 4.5 * sqrt(abs(1.1 - (x(I)/det_thresh_dB).^2)); 
+                hold on; plot(x,y,'k--','linewidth',2,'Color',[1 0 1]);hold off;
+                rule2_x=x;rule2_y=y;
+            end
+            if Iplot==5
+                %add special for Band A and C on "Right" command
+                x = [0 6-(1e-6) 6 12];y = [100 100 3 3];
+                hold on; plot(x,y,'k--','linewidth',2,'Color',[1 0 1]);hold off;
+                rule1_x=x;rule1_y=y;
+            end
+            if Iplot==9
+                %add special for Band C and D on "Forward" command
+                x = [4 12];y=[-3 7.5];
+                hold on; plot(x,y,'k--','linewidth',2,'Color',[1 0 1]);hold off;
+                rule3_x=x;rule3_y=y;
+            end
         end
     end
 end
 
+%% reprocess data via new rules
+detect_perRule = zeros(size(peak_SNR_per_band_dB,1),3);
+metric_perRule = zeros(size(peak_SNR_per_band_dB,1),3);
+detect_oldRule = zeros(size(peak_SNR_per_band_dB,1),3);
+for Idata=1:size(peak_SNR_per_band_dB,1)
+    vals_perBand = peak_SNR_per_band_dB(Idata,:);
+    
+    % old rules
+    [maxVal,J]=max(vals_perBand(1:end-1));
+    if (maxVal >= det_thresh_dB)
+        detect_oldRule(Idata,J) = J;
+    end
+    
+    
+    % new rules
+    
+    %rule1
+    rule_ind=1;
+    primary_val = vals_perBand(1);
+    secondary_val = vals_perBand(3);
+    compare_val = interp1(rule1_x,rule1_y,primary_val,'linear','extrap');
+    if (primary_val > 0)
+        if (secondary_val >= compare_val)
+            detect_perRule(Idata,rule_ind) = 1;
+            metric_perRule(Idata,rule_ind) = primary_val;
+        end
+    end
+    
+    %rule2
+    rule_ind=2;
+    primary_val = vals_perBand(2);
+    secondary_val = vals_perBand(4);
+    compare_val = interp1(rule2_x,rule2_y,primary_val,'linear','extrap');
+    if (primary_val > 0)
+        if (secondary_val >= compare_val)
+            detect_perRule(Idata,rule_ind) = 2;
+            metric_perRule(Idata,rule_ind) = primary_val;
+        end
+    end
+    
+    %rule 3
+    rule_ind=3;
+    primary_val = vals_perBand(3);
+    secondary_val = vals_perBand(4);
+    compare_val = interp1(rule3_x,rule3_y,primary_val,'linear','extrap');
+    if (primary_val > 3)
+        if (secondary_val <= compare_val)  %note, we want to be BELOW this threshold
+            detect_perRule(Idata,rule_ind) = 3;
+            metric_perRule(Idata,rule_ind) = primary_val;
+        end
+    end
+    
+    % if more than one is true, choose the one with the biggest metric
+    nDetected = length(find(metric_perRule(Idata,:) > 0));
+    [max_metric,J]=max(metric_perRule(Idata,:));
+    if nDetected > 1
+        detect_perRule(Idata,:) = 0;
+        detect_perRule(Idata,J) = J;
+    end
+        
+end
+
+
+
+
+%plot results
+figure;setFigureTallerWide;
+subplot(3,1,1);
+plot(wT,peak_SNR_per_band_dB,'linewidth',2);
+xlabel('Time (sec)');
+ylabel('SNR (dB)');
+ylim([-3 12]);set(gca,'YTick',[-3:3:12]);
+xlim(t_lim);
+%legend('Band 1','Band 2','Band 3','Band 4','Band 5',2);
+legend('Band A','Band B','Band C','Band D',2);
+
+for Iplot=2:3
+    switch Iplot
+        case 2
+            y = detect_oldRule;
+            tt = 'Original Detection Rules';
+        case 3
+            y = detect_perRule;
+            tt = 'New Detection Rules';
+    end
+    
+    
+    
+    subplot(3,1,Iplot);
+    plot(wT,y,'o','linewidth',2);
+    set(gca,'YTick',[0 1 2 3],'YTickLabel',{'None','Right','Left','Forward'});
+    ylim([0 3]+[-1 1]);
+    xlim(t_lim);
+    ylabel('Action');
+    xlabel('Time (sec)');
+    title(['New Detection Rules']);
+    
+    
+    hold on;
+    txt=['LRF'];
+    for Itruth=1:size(truth_sec,1)
+        plot(truth_sec(Itruth,1)*[1 1],ylim,'k:','linewidth',2);
+        plot(truth_sec(Itruth,2)*[1 1],ylim,'k:','linewidth',2);
+        yl=ylim;
+        text(mean(truth_sec(Itruth,:)),yl(2)-0.05*diff(yl),txt(truth_code(Itruth)),...
+            'HorizontalAlignment','Center','VerticalAlignment','Top',...
+            'BackgroundColor','white','FontWeight','Bold');
+    end
+    hold off
+end
