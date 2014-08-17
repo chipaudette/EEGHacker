@@ -140,7 +140,7 @@ for Iplot=1:2
         xlim([1 4]);
     end
     
-        h=weaText({datestr;fname},3);
+    h=weaText({['Test: ' datestr];['File: ' fname]},3);
     set(h,'Interpreter','none');
 end
 
