@@ -1,11 +1,12 @@
+yl=[];
 datestr = '2014-08-17';
 pname = 'Data\';
-fname = '05-testSig_1x_Fast.bin';
-fname = '06-normalInput.bin';
-%fname = '07-capture_bot_bot.bin';
-fname = '08-capture_top_top.bin';
-%fname = '09-capture_bot_top.bin';
-%fname = '10-capture_top_bot.bin';
+fname = '05-testSig_1x_Fast.bin';yl=3000*[-1 1];
+%%fname = '06-normalInput.bin';
+%%fname = '07-capture_bot_bot.bin';
+fname = '08-capture_top_top.bin'; yl=[-300 500];
+%%fname = '09-capture_bot_top.bin';
+%%fname = '10-capture_top_bot.bin';
 
 nbytes_per_packet = 36;
 fs = 250;
@@ -82,12 +83,16 @@ fulldata = int32(zeros(size(data,1),8));
 fulldata=double(fulldata);
 
 %% filter the data
-fulldata = fulldata - ones(size(fulldata,1),1)*mean(fulldata);
-[b,a]=butter(1,[55 65]/(fs/2),'stop');
-fulldata = filter(b,a,fulldata);
-[b,a]=butter(2,65/(fs/2));
-fulldata = filter(b,a,fulldata);
-
+filt_txt={};
+if (1)
+    fulldata = fulldata - ones(size(fulldata,1),1)*mean(fulldata);
+    [b,a]=butter(1,[55 65]/(fs/2),'stop');
+    fulldata = filter(b,a,fulldata);
+    [b,a]=butter(2,55/(fs/2));
+    fulldata = filter(b,a,fulldata);
+    filt_txt = {'Notch 60 Hz (N=1)';
+                'Low-Pass at 55 Hz (N=2)';};
+end
 
 
 
@@ -126,6 +131,7 @@ ylim([-1 10]);
 
 for Iplot=1:2
     subplot(nrow,ncol,ncol+Iplot);
+    Idata=1; %plot first channel only
     y = fulldata(:,Idata);
     y_uV = y * 4.5 / (2^23-1) / 24 * 1e6;
     plot(t,y_uV);
@@ -134,7 +140,9 @@ for Iplot=1:2
     %ylim([-2^31 2^31]);
     xlabel('Time (sec)');
     ylabel('uV');
-    ylim(500*[-1 1]+mean(y_uV));
+    if ~isempty(yl)
+        ylim(yl);
+    end
     
     if (Iplot==2)
         xlim([1 4]);
@@ -142,6 +150,8 @@ for Iplot=1:2
     
     h=weaText({['Test: ' datestr];['File: ' fname]},3);
     set(h,'Interpreter','none');
+    
+    weaText(filt_txt,2);
 end
 
 
