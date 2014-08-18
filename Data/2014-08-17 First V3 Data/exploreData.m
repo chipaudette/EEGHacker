@@ -1,9 +1,9 @@
 
 pname = 'Data\';
 fname = '05-testSig_1x_Fast.bin';
-fname = '06-normalInput.bin';
-fname = '07-capture_bot_bot.bin';
-fname = '08-capture_top_top.bin';
+% fname = '06-normalInput.bin';
+% fname = '07-capture_bot_bot.bin';
+% fname = '08-capture_top_top.bin';
 
 nbytes_per_packet = 36;
 fs = 250;
@@ -60,7 +60,7 @@ packet_counter = double(data(:,packet_counter_ind));
 %start_ind = packet_counter_ind+1;;end_ind = 8*4+start_ind-1;
 %inds = [start_ind:4:end_ind];
 fulldata = int32(zeros(size(data,1),8));
-if (1)
+%if (1)
     %MSByte first
     for Irow=1:size(fulldata,1)
         for Icol=1:size(fulldata,2)
@@ -74,11 +74,11 @@ if (1)
         end
     end
     MSB_txt = 'MSB';
-else
-    %LSByte first
-    fulldata = data(:,inds+2)*(2^16) + data(:,inds+1)*(2^8) + data(:,inds);
-    MSB_txt = 'LSB';
-end
+% else
+%     %LSByte first
+%     fulldata = data(:,inds+2)*(2^16) + data(:,inds+1)*(2^8) + data(:,inds);
+%     MSB_txt = 'LSB';
+% end
 
 fulldata=double(fulldata);
 
@@ -120,10 +120,11 @@ for Idata=1:size(fulldata,2)
     y = fulldata(:,Idata);
     y_uV = y * 4.5 / (2^23-1) / 24 * 1e6;
     plot(t,y_uV);
-    title(['Channel ' num2str(Idata) ', ' MSB_txt]);
+    title(['OpenBCI V3, Channel ' num2str(Idata)]);
     xlim(t([1 end]));
     %ylim([-2^31 2^31]);
     ylabel('uV');
+    xlabel('Time (sec)');
     ylim(2000*[-1 1]+mean(y_uV));
 end
 
