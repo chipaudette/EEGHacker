@@ -38,15 +38,22 @@
 #define POWER_DOWN ('-')   //clearly, this means "less power"
 #define POWER_UP ('=')     //it's the '+' (more power), but without needing to press the shift key
 #define SHUT_DOWN (' ')
+#define CHANGE_MODE_ACCUM ('1')
+#define CHANGE_MODE_TEMP ('2')
 
 #define MAX_VAL (255)
 #define MIN_VAL (0)
 
-//deifne order of joystick axes in the potValues array
+//define order of joystick axes in the potValues array
 #define IND_UP_DOWN (0)
 #define IND_SLIDE (1)
 #define IND_BACK_FORE (2)
 #define IND_TURN (3)
+
+//define the operating mode
+#define MODE_ACCUM 0     //for trimming
+#define MODE_TEMP 1  // for temporary commands
+
 
 const int SS_pin = 10;
 const int chan_per_device = 2;
@@ -55,7 +62,9 @@ const int n_Devices = 2;
 const int n_PotValues = 4;
 byte potValues[n_PotValues];
 byte defaultPotValues[n_PotValues];
-byte potIncrement[] = {2,2,2,5};
+byte potIncrement_accum[] = {2,2,2,5};
+byte potIncrement_temp[] = {10, 10, 10, 10};
+int operating_mode = MODE_ACCUM;
 
 volatile char inChar;
 unsigned long lastCommand_millis = 0;
@@ -66,37 +75,44 @@ void setup() {
   // initialize serial:
   Serial.begin(115200);
   
-  // print help
-  Serial.println("TestHexBugController: starting...");
-  Serial.println("Commands Include: ");
-  Serial.print("    Power Up:    "); Serial.println(POWER_UP);
-  Serial.print("    Power Down:  "); Serial.println(POWER_DOWN);
-  Serial.print("    Foreward:    "); Serial.println(FOREWARD);
-  Serial.print("    Backward:    "); Serial.println(BACKWARD);
-  Serial.print("    Turn Left:   "); Serial.println(TURN_LEFT);
-  Serial.print("    Turn Right:  "); Serial.println(TURN_RIGHT);
-  Serial.print("    Slide Left:  "); Serial.println(SLIDE_LEFT);
-  Serial.print("    Slide Right: "); Serial.println(SLIDE_RIGHT);
-  Serial.print("    Shut Down:   "); Serial.println(" (space bar) ");
-  
   //define default pot values...adjust these to trim out level flight
   defaultPotValues[IND_UP_DOWN] = 0; //always have this be zero!
   defaultPotValues[IND_SLIDE] = 127;  //something close to mid point
   defaultPotValues[IND_BACK_FORE] = 127; //something close to mid point
   defaultPotValues[IND_TURN] = 127;  //something close to mid point
-  
-  //initialize the pins
+
+  //initialize setup
   shutDownQuadcopter();
+  
+  // print help
+  Serial.println(F("TestHexBugController: starting..."));
+  Serial.println(F("Commands Include: "));
+  Serial.print(F("    Power Up:    ")); Serial.println(POWER_UP);
+  Serial.print(F("    Power Down:  ")); Serial.println(POWER_DOWN);
+  Serial.print(F("    Foreward:    ")); Serial.println(FOREWARD);
+  Serial.print(F("    Backward:    ")); Serial.println(BACKWARD);
+  Serial.print(F("    Turn Left:   ")); Serial.println(TURN_LEFT);
+  Serial.print(F("    Turn Right:  ")); Serial.println(TURN_RIGHT);
+  Serial.print(F("    Slide Left:  ")); Serial.println(SLIDE_LEFT);
+  Serial.print(F("    Slide Right: ")); Serial.println(SLIDE_RIGHT);
+  Serial.print(F("    Shut Down:   ")); Serial.println(F(" (space bar) "));
+  printOperatingMode();
+  Serial.print(F("    Switch to Accum Mode: ")); Serial.println(CHANGE_MODE_ACCUM);
+  Serial.print(F("    Switch to Temp Mode:  ")); Serial.println(CHANGE_MODE_TEMP);
+  
 }
 
 void shutDownQuadcopter() {
+  Serial.println(F("shutDownQuadCopter..."));
   for (int i=0; i<n_PotValues; i++) {
     potValues[i]=defaultPotValues[i];
   }
+  potValues[IND_UP_DOWN] = 0;
   digiPots.setValues(potValues,n_PotValues);
 }
 
-void stopCommandExceptUpDown() {
+void stopTempCommand() {
+  Serial.println(F("stopTempCommand..."));
   for (int i=0; i<n_PotValues; i++) {
     if (i != IND_UP_DOWN) {
       potValues[i]=defaultPotValues[i];
@@ -108,8 +124,10 @@ void stopCommandExceptUpDown() {
 void loop() {
   // print the string when a newline arrives:
   if (millis() > lastCommand_millis+commndDuration_millis) {
-    lastCommand_millis = millis()+100; //don't do this branch for a few milliseconds
-    stopCommandExceptUpDown();
+    lastCommand_millis = millis()+500; //don't do this branch for a few milliseconds
+    if (operating_mode == MODE_TEMP) {
+      stopTempCommand();
+    }
   }
 }
 
@@ -143,6 +161,10 @@ void serialEvent() {
         incrementPotAndIssueCommand(IND_UP_DOWN,1); break;
       case SHUT_DOWN:
         shutDownQuadcopter(); break;
+      case CHANGE_MODE_ACCUM:
+        switchOperatingMode(MODE_ACCUM); break;
+      case CHANGE_MODE_TEMP:
+        switchOperatingMode(MODE_TEMP); break;
      }
   }
 }
@@ -153,11 +175,48 @@ void incrementPotAndIssueCommand(int index,int sign) {
   if (index < n_PotValues) {
     
     //compute the new command value
-    int foo_val = ((int)potValues[index]) + ((int)potIncrement[index]);
+    int increment = (int)potIncrement_accum[index];
+    if (operating_mode == MODE_TEMP) increment = (int)potIncrement_temp[index];
+    if (sign < 0) increment = -increment;
+    int foo_val = ((int)potValues[index]) + increment;
     foo_val = max(MIN_VAL,min(MAX_VAL,foo_val));
     potValues[index] = ((byte)foo_val);
     
+    if (operating_mode == MODE_ACCUM) {
+      defaultPotValues[index] = potValues[index];
+    }
+    
+    //print the command
+    Serial.print(F("issuing command: "));
+    for(int i=0; i<n_PotValues; i++) {
+      Serial.print(potValues[i]);
+      Serial.print(" ");
+    }
+    Serial.println();
+    
     //issue the command
     digiPots.setValues(potValues,n_PotValues);
+  }
+}
+
+void switchOperatingMode(int new_mode) {
+  Serial.print(F("Current mode: "));
+  Serial.print(operating_mode);
+  Serial.print(F(", Commanded mode: "));
+  Serial.println(new_mode);
+  
+  stopTempCommand(); //stop any temporary command currently happening
+  operating_mode = new_mode; //change the mode
+  printOperatingMode();
+}
+
+void printOperatingMode(void) {
+  switch (operating_mode) {
+    case MODE_ACCUM:
+      Serial.println(F("operating_mode = MODE_ACCUM"));
+      break;
+    case MODE_TEMP:
+      Serial.println(F("operating_mode = MODE_TEMP"));
+      break;
   }
 }
