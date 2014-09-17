@@ -14,16 +14,19 @@
  *
  */
 
-#include <EEPROM.h>
+
+//include <EEPROM.h>
 #include <SPI.h>
 #include <SdFat.h>      // from https://github.com/greiman/SdFat
 #include <SdFatUtil.h>  // from https://github.com/greiman/SdFat
 #include "OpenBCI_04.h"
 
 
+
+
 //-----------------------------------------------------------------
 // Data info
-const int dataLength = 24;  // size (bytes) of payload in data packet
+const int dataLength = 31;  // size (bytes) of payload in data packet
 char serialCheckSum;            // holds the byte count for streaming
 int sampleCounter = 0;         // sample counter
 word packetCounter = 0;         // used to limit the number of packets during tests
@@ -126,17 +129,22 @@ void loop() {
     if (streamingData) {            // receive 'b' on serial to set this
       sampleCounter++;  //count how many samples we've taken
       
+      int tx_count=0;
       //benchWriteTime = micros();                 // BENCHMARK SAMPLE WRITE TIME
-      Serial.write(serialCheckSum);              // send the number of bytes to follow
+      //Serial.write(serialCheckSum);              // send the number of bytes to follow
       //Serial.write(0xA0);                        // send the start byte
-      Serial.write(lowByte(packetCounter));         // send the sampleCounter
+      Serial.write(lowByte(packetCounter)); tx_count++;  // send the sampleCounter
       
        //write OpenBCI's raw bytes
        //Serial.write(OBCI.ads.rawChannelData, min(dataLength, (nActiveChannels * 3))); // send one byte of data
        for (int i=0; i < 24; i++) {
          Serial.write(OBCI.ads.rawChannelData[i]); // send one byte of data
        }
+       tx_count += 24;  //we wrote 24 bytes above
       
+       for (int i=tx_count; i<dataLength; i++) {
+         Serial.write(0); //fill out the rest of the data packet
+       }
        
        //increment the packet counter
        packetCounter++;  if (packetCounter > 255) packetCounter = 0; //constrain
@@ -161,7 +169,7 @@ void serialEvent() { //done at end of every loop(), when serial data has been de
     switch (token) {
       case 'b':
         //cout << pstr("\nStarting\n");
-        delay(1000);
+        delay(500);
         startRFDuinoStreaming();        //put RFDuino into STREAMING mode
         startData();        //start ADS1299
         sampleCounter = 0;
@@ -174,7 +182,7 @@ void serialEvent() { //done at end of every loop(), when serial data has been de
         //stop the ADS1299
         stopData();
         //cout << pstr("\nStopping\n");
-        delay(1000);
+        delay(500);
         break;
 
       default:
