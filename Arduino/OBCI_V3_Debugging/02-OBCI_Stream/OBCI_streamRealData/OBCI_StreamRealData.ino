@@ -133,17 +133,19 @@ void loop() {
       //benchWriteTime = micros();                 // BENCHMARK SAMPLE WRITE TIME
       //Serial.write(serialCheckSum);              // send the number of bytes to follow
       //Serial.write(0xA0);                        // send the start byte
-      Serial.write(lowByte(packetCounter)); tx_count++;  // send the sampleCounter
+      //Serial.write(lowByte(packetCounter)); tx_count++;  // send the sampleCounter
+      Serial.write(0);  // send the sampleCounter
       
        //write OpenBCI's raw bytes
        //Serial.write(OBCI.ads.rawChannelData, min(dataLength, (nActiveChannels * 3))); // send one byte of data
-       for (int i=0; i < 24; i++) {
-         Serial.write(OBCI.ads.rawChannelData[i]); // send one byte of data
+       for (int i=1; i < (1+24); i++) {
+         //Serial.write(OBCI.ads.rawChannelData[i]); // send one byte of data
+         Serial.write(lowByte(i));
        }
-       tx_count += 24;  //we wrote 24 bytes above
       
-       for (int i=tx_count; i<dataLength; i++) {
-         Serial.write(0); //fill out the rest of the data packet
+       for (int i=(1+24); i<(1+24+6); i++) {
+         //Serial.write(0); //fill out the rest of the data packet
+         Serial.write(lowByte(i));
        }
        
        //increment the packet counter
