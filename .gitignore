@@ -4,7 +4,7 @@
 *.avi
 *.mov
 openBCI*.txt
-OpenBCI*.jpg
+OpenBCI_GUI\OpenBCI*.jpg
 openBCI*.wav
 
 Processing\OBCI_V3_Debugging\OBCI_Verify_PacketCount\OBCI_packetCount_verification\*
