@@ -13,7 +13,7 @@ t_lim_sec = [0, 0]   # default plot time limits [0,0] will be ignored
 alpha_lim_sec = [0, 0]
 
 # define which data to load
-case = 2  # choose which case to load
+case = 4  # choose which case to load
 pname = 'SavedData/'
 if (case == 1):
     fname = 'openBCI_raw_2014-10-04_18-50-20_RightForehead_countebackby3.txt'
