@@ -80,7 +80,7 @@ EEG_Processing eegProcessing;
 EEG_Processing_User eegProcessing_user;
 
 //fft constants
-int Nfft = 256; //set resolution of the FFT.  Use N=256 for normal, N=512 for MU waves
+int Nfft = 256*2; //set resolution of the FFT.  Use N=256 for normal, N=512 for MU waves
 FFT fftBuff[] = new FFT[nchan];   //from the minim library
 float[] smoothFac = new float[]{0.75, 0.9, 0.95, 0.98, 0.0, 0.5};
 final int N_SMOOTHEFAC = 6;

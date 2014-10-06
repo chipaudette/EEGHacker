@@ -4,6 +4,11 @@
 *.avi
 *.mov
 openBCI*.txt
+OpenBCI*.jpg
+openBCI*.wav
+
+Processing\OBCI_V3_Debugging\OBCI_Verify_PacketCount\OBCI_packetCount_verification\*
+Processing\OBCI_V3_Debugging\OpenBCI_GUI\SavedData\*
 
 #################
 ## Eclipse
