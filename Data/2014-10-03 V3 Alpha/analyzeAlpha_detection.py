@@ -318,7 +318,7 @@ if (det_thresh_uV > 0.0):
     if (use_detect_rules == 1):
         # simply based on Alpha amplitude
         detect_txt = "Detect If > " + str(det_thresh_uV) + " uVrms"
-        bool_ind = (alpha_max_uVperSqrtBin >= det_thresh_uV)
+        bool_ind = ((alpha_max_uVperSqrtBin >= det_thresh_uV) & ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])))
         plt.plot(full_t_spec[bool_ind],
                  alpha_max_uVperSqrtBin[bool_ind],
                  'ro', linewidth=3)
@@ -327,12 +327,14 @@ if (det_thresh_uV > 0.0):
         detect_txt = ("Detect If Alpha > " + str(det_thresh_uV) + " uVrms\n" +
                       "and Guard < "+ str(guard_thresh_uV) + " uVrms")
         bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) &
-                     (guard_mean_uVperSqrtBin > guard_thresh_uV) )
+                     (guard_mean_uVperSqrtBin > guard_thresh_uV) &
+                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
         plt.plot(full_t_spec[bool_ind],
                  alpha_max_uVperSqrtBin[bool_ind],
                  'gx', markeredgewidth=2)
         bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) & 
-                     (guard_mean_uVperSqrtBin < guard_thresh_uV) )
+                     (guard_mean_uVperSqrtBin < guard_thresh_uV) &
+                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
         plt.plot(full_t_spec[bool_ind],
                  alpha_max_uVperSqrtBin[bool_ind],
                  'ro', linewidth=2)
@@ -341,21 +343,34 @@ if (det_thresh_uV > 0.0):
         detect_txt = ("Detect If Alpha > " + str(det_thresh_uV) + " uVrms\n" +
                       "and Alpha/Guard Ratio > "+ str(det_thresh_ratio))
         bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) &
-                     (ratio < det_thresh_ratio) )
+                     (ratio < det_thresh_ratio) &
+                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
         plt.plot(full_t_spec[bool_ind],
                  alpha_max_uVperSqrtBin[bool_ind],
                  'gx', markeredgewidth=2)
         bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) & 
-                     (ratio > det_thresh_ratio) )
+                     (ratio > det_thresh_ratio) &
+                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
         plt.plot(full_t_spec[bool_ind],
                  alpha_max_uVperSqrtBin[bool_ind],
                  'ro', linewidth=2)               
-    #describe type of detection logic
+    
+    # describe type of detection logic
     ax.text(0.025, 0.95, detect_txt,
             transform=ax.transAxes,
             verticalalignment='top',
             horizontalalignment='left',
             backgroundcolor='w')
+    
+    # declare sensitivity and false alarms
+    n_good = sum(bool_ind & ((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])))
+    n_eyes_closed = sum((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
+    n_bad = sum(bool_ind & ~((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])))
+    n_eyes_open = sum((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1]) & ~(full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
+    print "N_true = " + str(n_good)
+    print "N_eyes_closed = " + str(n_eyes_closed)
+    print "N_false = " + str(n_bad)
+    print "N_eyes_open = " + str(n_eyes_open)
             
 # add lines showing alpha time
 if (alpha_lim_sec[1] != 0):
