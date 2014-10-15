@@ -6,14 +6,16 @@ from scipy import signal
 
 
 # some program constants
-NFFT = 256      # pick the length of the fft
 fs_Hz = 250.0   # assumed sample rate for the EEG data
 f_lim_Hz = [0, 30]      # frequency limits for plotting
 
-# detectection parameters
+# frequency-based processing parameters
+NFFT = 256      # pick the length of the fft
 alpha_band_Hz = np.array([7.5, 11.5])   # where to look for the alpha peak
 noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
 guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
+
+# detectection parameters
 use_detect_rules = 1    # 1 = Alpha only, 2 = Alpha and Guard Thres, 3 = Alpha and Ratio
 det_thresh_uV = 3.5     # 3.5 for NFFT = 256, 2.5 for NFFT = 512
 guard_thresh_uV = 2.5
@@ -44,8 +46,13 @@ elif (case == 3):
 elif (case == 4):
     fname = 'openBCI_raw_2014-10-05_17-14-45_O1_Alpha_noCaffeine.txt'
     t_lim_sec = [50, 125]
-    alpha_lim_sec = [87.75, 118.5]
-    t_other_sec = [73.0, 82.0]  # burst of interference
+    if 1:
+        #normal analysis
+        alpha_lim_sec = [87.75, 118.5]
+    else:
+        #compare eyes-closed to interference
+        alpha_lim_sec = [108.0, 112.0]
+        t_other_sec = [120.0, 124.0]  # burst of interference
 
 
 # load data into numpy array
@@ -135,22 +142,22 @@ mean_spectra_uVrmsPerSqrtBin = np.sqrt(mean_spectra_PSDperBin)
 
 # show the eyes-closed alpha period
 yl = ax1.get_ylim()
-plt.plot(alpha_lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=2)
-plt.plot(alpha_lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=2)
+plt.plot(alpha_lim_sec[0]*np.array([1, 1]), yl, 'w--', linewidth=3)
+plt.plot(alpha_lim_sec[1]*np.array([1, 1]), yl, 'w--', linewidth=3)
 ax1.text(np.mean(alpha_lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
          verticalalignment='top',
          horizontalalignment='center',
          backgroundcolor='w')
   
 # show the "other" period
-#if (t_other_sec[1] != 0):
-#    yl = ax1.get_ylim()
-#    plt.plot(t_other_sec[0]*np.array([1.0, 1.0]), yl, 'k--', linewidth=2)
-#    plt.plot(t_other_sec[1]*np.array([1.0, 1.0]), yl, 'k--', linewidth=2)
-#    ax1.text(np.mean(t_other_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Other',
-#             verticalalignment='top',
-#             horizontalalignment='center',
-#             backgroundcolor='w')
+if (t_other_sec[1] != 0):
+    yl = ax1.get_ylim()
+    plt.plot(t_other_sec[0]*np.array([1.0, 1.0]), yl, 'w--', linewidth=3)
+    plt.plot(t_other_sec[1]*np.array([1.0, 1.0]), yl, 'w--', linewidth=3)
+    ax1.text(np.mean(t_other_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Other',
+             verticalalignment='top',
+             horizontalalignment='center',
+             backgroundcolor='w')
 
 # compute the mean spectra for not-Alpha period
 foo_spec = spec_PSDperBin
@@ -168,32 +175,35 @@ for Iplot in [0, 1]:
     ax = plt.subplot(312+Iplot)
 
     #plot all frequencies
-    plt.plot(freqs, mean_spectra_uVrmsPerSqrtBin, 'k.-',linewidth=1)
+    plt.plot(freqs, mean_spectra_uVrmsPerSqrtBin, 'k.-',linewidth=2)
     plt.xlim(f_lim_Hz)
     plt.ylim([0, 6])
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('RMS Amplitude\n(uV per sqrt(Bin))')    
     plt.title('Mean Spectrum for "Eyes Closed" EEG Data')
 
-    #if Iplot==1:
+    if (t_other_sec[1] > 0):
+        #change title
+        plt.title('Comparing Mean Spectrum for Different Activities')        
+        
         #add the "other" signal
-        # plt.plot(freqs,mean_spectra_noise_uVrmsPerSqrtBin,'r.-',linewidth=2) 
+        plt.plot(freqs,mean_spectra_noise_uVrmsPerSqrtBin,'r.-',linewidth=2) 
         
         
         # add legend
-        # plt.legend(('Eyes Closed', 'Other'), loc=1, fontsize='medium')
+        plt.legend(('Eyes Closed', 'Other'), loc=1, fontsize='medium')
                 
         
-        # highlight the guard
+#        # highlight the guard
 #        bool_inds = ((freqs > guard_band_Hz[0, 0]) & (freqs < guard_band_Hz[0, 1]))
 #        plt.plot(freqs[bool_inds], mean_spectra_uVrmsPerSqrtBin[bool_inds], 'go-',linewidth=4)    
 #        bool_inds = ((freqs > guard_band_Hz[1, 0]) & (freqs < guard_band_Hz[1, 1]))
 #        plt.plot(freqs[bool_inds], mean_spectra_uVrmsPerSqrtBin[bool_inds], 'go-',linewidth=4)
                
-    
-    #highlight the alpha
-    bool_inds = ((freqs > alpha_band_Hz[0]) & (freqs < alpha_band_Hz[1]))
-    plt.plot(freqs[bool_inds], mean_spectra_uVrmsPerSqrtBin[bool_inds], 'bo-', linewidth=3)    
+    else:
+        #highlight the alpha
+        bool_inds = ((freqs > alpha_band_Hz[0]) & (freqs < alpha_band_Hz[1]))
+        plt.plot(freqs[bool_inds], mean_spectra_uVrmsPerSqrtBin[bool_inds], 'bo-', linewidth=3)    
     
     # add markings showing the "alpha" that was assessed
     plt.plot(alpha_band_Hz[0]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=2)
@@ -298,7 +308,10 @@ ax1.text(0.025, 0.95,
 
 
 # make time-domain plot of alpha amplitude
-ax = plt.subplot(312, sharex=ax1)
+if (use_detect_rules != 2):
+    ax = plt.subplot(312, sharex=ax1)
+else:
+    ax = plt.subplot(313, sharex=ax1)
 plt.plot(full_t_spec, alpha_max_uVperSqrtBin, '.-')
 plt.ylim([0, 12])
 plt.xlim([t_sec[0], t_sec[-1]])
@@ -387,7 +400,10 @@ if (alpha_lim_sec[1] != 0):
 
 
 # make time-domain plot of alpha and guard amplitude
-ax = plt.subplot(313, sharex=ax1)
+if (use_detect_rules != 2):
+    ax = plt.subplot(313, sharex=ax1)
+else:
+    ax = plt.subplot(312, sharex=ax1)
 #plt.plot(full_t_spec, alpha_sum_uVrms, '.-',
 #         full_t_spec, alpha_max_uVperSqrtBin, '.-')
 if (use_detect_rules == 3):
@@ -406,6 +422,14 @@ else:
      
      
 plt.plot(full_t_spec, y, 'g.-')
+if (use_detect_rules == 2):
+    bool_ind = (y > ythresh)
+    plt.plot(full_t_spec[bool_ind], y[bool_ind], 'gx', markeredgewidth=2)
+    ax.text(0.025, 0.95, "Reject if Guard > " + str(ythresh) + " uVrms",
+        transform=ax.transAxes,
+        verticalalignment='top',
+        horizontalalignment='left',
+        backgroundcolor='w')
 plt.ylim([0, 12])
 plt.xlim([t_sec[0], t_sec[-1]])
 if (t_lim_sec[2-1] != 0):
@@ -417,6 +441,7 @@ plt.title(tt)
 # add threshold
 if (ythresh > 0.0):
     plt.plot(ax.get_xlim(),ythresh * np.array([1, 1]),'r--',linewidth=2)
+    
 
 
 # add lines showing alpha time
