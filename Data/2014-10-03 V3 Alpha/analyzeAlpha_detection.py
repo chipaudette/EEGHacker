@@ -16,9 +16,9 @@ noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
 guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
 
 # detectection parameters
-use_detect_rules = 1    # 1 = Alpha only, 2 = Alpha and Guard Thres, 3 = Alpha and Ratio
+use_detect_rules = 2    # 1 = Alpha only, 2 = Alpha and Guard Thres, 3 = Alpha and Ratio
 det_thresh_uV = 3.5     # 3.5 for NFFT = 256, 2.5 for NFFT = 512
-guard_thresh_uV = 2.5
+guard_thresh_uV = 2.5   # 2.5
 det_thresh_ratio = 3.5
 
 # define some default values that will get overwritten in a moment
@@ -27,7 +27,7 @@ alpha_lim_sec = [0, 0]  # default
 t_other_sec = [0, 0]    # default
 
 # define which data to load
-case = 4  # choose which case to load
+case = 2  # choose which case to load
 pname = 'SavedData/'
 if (case == 1):
     fname = 'openBCI_raw_2014-10-04_18-50-20_RightForehead_countebackby3.txt'
@@ -376,8 +376,10 @@ if (det_thresh_uV > 0.0):
             backgroundcolor='w')
     
     # declare sensitivity and false alarms
-    n_good = sum(bool_ind & ((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])))
-    n_eyes_closed = sum((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
+    I_trueDetect = bool_ind & ((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
+    n_good = sum(I_trueDetect)
+    I_falseDetect = (full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])
+    n_eyes_closed = sum(I_falseDetect)
     n_bad = sum(bool_ind & ~((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])))
     n_eyes_open = sum((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1]) & ~(full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
     print "N_true = " + str(n_good)
@@ -465,7 +467,7 @@ plt.tight_layout()
 
 
 # %% discriminator
-fig = plt.figure(figsize=(15.25, 8.25))  # make new figure, set size in inches
+fig = plt.figure(figsize=(12, 8.25))  # make new figure, set size in inches
 ax1 = plt.subplot(221)
 alpha_bool_inds = (full_t_spec > alpha_lim_sec[0]) & (full_t_spec < alpha_lim_sec[1])
 noise_bool_inds = (full_t_spec > t_lim_sec[0]) & (full_t_spec < t_lim_sec[1]) & ~alpha_bool_inds
@@ -542,33 +544,37 @@ if (det_thresh_ratio > 0.0):
 plt.legend(['Eyes Closed', 'Other'], loc=2, fontsize='medium')
 
 
-# plot ratio again
-ax1 = plt.subplot(223)
-plt.plot(guard_mean_uVperSqrtBin[alpha_bool_inds], ratio[alpha_bool_inds],'bo', linewidth=2);
-plt.plot(guard_mean_uVperSqrtBin[noise_bool_inds], ratio[noise_bool_inds],'rs', linewidth=2);
-plt.xlabel('Guard Band (uVrms)')
-plt.ylabel('Ratio Alpha / Guard  (uVrms/uVrms)')
-plt.title(fname[12:])
-if 0:
-    # log
-    ax1.set_yscale('log')
-    ax1.set_xscale('log')
-    plt.xlim([0.5, 30])
-    plt.ylim([0.5, 12])
-else:
-    plt.xlim([0, 6])
-    plt.ylim([0, 8])
+# plot ROC
+thresh1 = np.arange(0,8,0.25)
+thresh2 = np.arange(0,6,0.25)
+N_true = np.zeros([thresh1.size, thresh2.size])
+N_false = np.zeros([thresh1.size, thresh2.size])
+bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
+bool_inTrueTime = (full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])
+for I1 in range(thresh1.size):
+    print str(I1) + ' of ' + str(thresh1.size)
+    
+    for I2 in range(thresh2.size):
+        #count detections
+        if (use_detect_rules == 1):
+            bool_detect = alpha_max_uVperSqrtBin > thresh1[I1];
+        elif (use_detect_rules == 2):
+            bool_detect = (alpha_max_uVperSqrtBin > thresh1[I1]) & (guard_mean_uVperSqrtBin < thresh2[I2])
+        elif (use_detect_rules == 3):
+            bool_detect = (alpha_max_uVperSqrtBin > thresh1[I1]) & (ratio > thresh2[I2])
+            
+        #count true or false detections
+        bool_true = bool_detect & bool_inTime & bool_inTrueTime
+        N_true[I1,I2] = sum(bool_true)
+        bool_false = bool_detect & bool_inTime & ~bool_inTrueTime
+        N_false[I1,I2] = sum(bool_false)
 
-# add original threshold
-# plt.plot(det_thresh_uV * np.array([1, 1]),ax.get_ylim(), 'k--',linewidth=2)
-
-if (det_thresh_ratio > 0.0):
-    plt.plot(ax1.get_xlim(),det_thresh_ratio * np.array([1, 1]),'r--',linewidth=2)
-
-
-# add legend
-plt.legend(['Eyes Closed', 'Other'], loc=1, fontsize='medium')
-
+plt.subplot(223)
+plt.plot(N_false,N_true,'bo')
+plt.xlabel('N_False')
+plt.ylabel('N_True')
+plt.title('Detection Rules ' + str(use_detect_rules) )       
+plt.xlim([0, 20])
 
 
 
