@@ -27,7 +27,7 @@ alpha_lim_sec = [0, 0]  # default
 t_other_sec = [0, 0]    # default
 
 # define which data to load
-case = 2  # choose which case to load
+case = 4  # choose which case to load
 pname = 'SavedData/'
 if (case == 1):
     fname = 'openBCI_raw_2014-10-04_18-50-20_RightForehead_countebackby3.txt'
@@ -545,61 +545,93 @@ plt.legend(['Eyes Closed', 'Other'], loc=2, fontsize='medium')
 
 
 # plot ROC
-thresh1 = np.arange(0,8,0.25)
-thresh2 = np.arange(0,6,0.25)
-N_true = np.zeros([thresh1.size, thresh2.size])
-N_false = np.zeros([thresh1.size, thresh2.size])
-bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
-bool_inTrueTime = (full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])
-for I1 in range(thresh1.size):
-    print str(I1) + ' of ' + str(thresh1.size)
+for Iplot in range(2):
+    if Iplot==0:
+        all_use_rule = np.array([use_detect_rules])
+    else:
+        all_use_rule = np.array([1, 2, 3])  
+
+    for Irule in range(all_use_rule.size):
+        use_rule = all_use_rule[Irule]
     
-    for I2 in range(thresh2.size):
-        #count detections
-        if (use_detect_rules == 1):
-            bool_detect = alpha_max_uVperSqrtBin > thresh1[I1];
-        elif (use_detect_rules == 2):
-            bool_detect = (alpha_max_uVperSqrtBin > thresh1[I1]) & (guard_mean_uVperSqrtBin < thresh2[I2])
-        elif (use_detect_rules == 3):
-            bool_detect = (alpha_max_uVperSqrtBin > thresh1[I1]) & (ratio > thresh2[I2])
+        thresh1 = np.arange(0.0,6.0,0.1)
+        thresh2 = np.arange(0.0,6.0,0.1)
+        N_true = np.zeros([thresh1.size, thresh2.size])
+        N_false = np.zeros([thresh1.size, thresh2.size])
+        bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
+        bool_inTrueTime = (full_t_spec[bool_inTime] >= alpha_lim_sec[0]) & (full_t_spec[bool_inTime] <= alpha_lim_sec[1])
+        for I1 in range(thresh1.size):
             
-        #count true or false detections
-        bool_true = bool_detect & bool_inTime & bool_inTrueTime
-        N_true[I1,I2] = sum(bool_true)
-        bool_false = bool_detect & bool_inTime & ~bool_inTrueTime
-        N_false[I1,I2] = sum(bool_false)
+            bool_alpha_thresh = (alpha_max_uVperSqrtBin > thresh1[I1])
+            for I2 in range(thresh2.size):
+                #count detections
+                if (use_rule == 1):
+                    bool_detect = bool_alpha_thresh[bool_inTime]
+                elif (use_rule == 2):
+                    bool_detect = bool_alpha_thresh[bool_inTime] & (guard_mean_uVperSqrtBin[bool_inTime] < thresh2[I2])
+                elif (use_rule == 3):
+                    bool_detect = bool_alpha_thresh[bool_inTime] & (ratio[bool_inTime] > thresh2[I2])
+                    
+                #count true or false detections
+                bool_true = bool_detect & bool_inTrueTime
+                N_true[I1,I2] = np.count_nonzero(bool_true)
+                bool_false = bool_detect & ~bool_inTrueTime
+                N_false[I1,I2] = np.count_nonzero(bool_false)
+        
+        # find best N_true for each value of N_false
+        plot_N_false = np.arange(0,40,1)
+        if Irule==0:
+            plot_best_N_true = np.zeros([plot_N_false.size,all_use_rule.size])
+        for I_N_false in range(plot_N_false.size):
+            bool = (N_false == plot_N_false[I_N_false]);
+            if np.any(bool):
+                plot_best_N_true[I_N_false,Irule] = np.max(N_true[bool])
+            
+            # never be smaller than the previous value
+            if (I_N_false > 0):
+                if (plot_best_N_true[I_N_false-1,Irule] > plot_best_N_true[I_N_false,Irule]):
+                    plot_best_N_true[I_N_false,Irule] = plot_best_N_true[I_N_false-1,Irule]
+        
+        
+    plt.subplot(223+Iplot)
+    if Iplot==0:
+        plt.plot(N_false,N_true/sum(bool_inTrueTime)*100,'bo')
+        plt.plot(plot_N_false, plot_best_N_true/sum(bool_inTrueTime)*100, 'g', linewidth=3)
+        plt.title('Detection Rules ' + str(use_detect_rules) )       
+    else:
+        plt.plot(plot_N_false, plot_best_N_true/sum(bool_inTrueTime)*100, linewidth=3)
+        plt.legend(('Rule 1','Rule 2','Rule 3'),loc=4,fontsize='medium')
+        plt.title(fname[12:])
+        
+    plt.xlabel('N_False')
+    plt.ylabel('Fraction of Eyes-Closed Data\nCorrectly Detected (%)')
+    plt.xlim([0, 30])
+    plt.ylim([0, 100])
 
-plt.subplot(223)
-plt.plot(N_false,N_true,'bo')
-plt.xlabel('N_False')
-plt.ylabel('N_True')
-plt.title('Detection Rules ' + str(use_detect_rules) )       
-plt.xlim([0, 20])
 
-
-
-# plot ratio of alpha to guard
-ax = plt.subplot(224)
-plt.plot(full_t_spec,ratio,'.-')
-plt.ylabel('Ratio Alpha / Guard (uVrms/uVrms)')
-plt.xlabel('Time (sec)')
-plt.title(fname[12:])
-plt.xlim([t_sec[0], t_sec[-1]])
-plt.ylim([0, 14])
-if (t_lim_sec[2-1] != 0):
-    plt.xlim(t_lim_sec)
-
-#add detected points
-bool_ind = (alpha_max_uVperSqrtBin > det_thresh_uV) & (ratio > det_thresh_ratio)
-plt.plot(full_t_spec[bool_ind],ratio[bool_ind],'ro',linewidth=2)
-
-# add lines showing alpha time
-if (alpha_lim_sec[1] != 0):
-    plt.plot(alpha_lim_sec[0]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=3);
-    plt.plot(alpha_lim_sec[1]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=3);
-
-if (det_thresh_ratio > 0.0):
-    plt.plot(ax.get_xlim(),det_thresh_ratio * np.array([1, 1]),'r--',linewidth=2)
+#
+## plot ratio of alpha to guard
+#ax = plt.subplot(224)
+#plt.plot(full_t_spec,ratio,'.-')
+#plt.ylabel('Ratio Alpha / Guard (uVrms/uVrms)')
+#plt.xlabel('Time (sec)')
+#plt.title(fname[12:])
+#plt.xlim([t_sec[0], t_sec[-1]])
+#plt.ylim([0, 14])
+#if (t_lim_sec[2-1] != 0):
+#    plt.xlim(t_lim_sec)
+#
+##add detected points
+#bool_ind = (alpha_max_uVperSqrtBin > det_thresh_uV) & (ratio > det_thresh_ratio)
+#plt.plot(full_t_spec[bool_ind],ratio[bool_ind],'ro',linewidth=2)
+#
+## add lines showing alpha time
+#if (alpha_lim_sec[1] != 0):
+#    plt.plot(alpha_lim_sec[0]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=3);
+#    plt.plot(alpha_lim_sec[1]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=3);
+#
+#if (det_thresh_ratio > 0.0):
+#    plt.plot(ax.get_xlim(),det_thresh_ratio * np.array([1, 1]),'r--',linewidth=2)
 
 
 plt.tight_layout()
