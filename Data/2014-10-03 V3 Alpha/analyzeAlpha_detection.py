@@ -21,6 +21,26 @@ det_thresh_uV = 3.5     # 3.5 for NFFT = 256, 2.5 for NFFT = 512
 guard_thresh_uV = 2.5   # 2.5
 det_thresh_ratio = 3.5
 
+#if (NFFT < 512):
+#    if 0:
+#        det_thresh_uV = 3.89  # rule=2
+#        guard_thresh_uV = 1.67 # rule=2
+#    
+#        #det_thresh_uV = 3.16 #rule = 3, for ratio = 3.5
+#    else:
+#        det_thresh_uV = 3.75 # zero false alarms, rule 2, file 4 only 
+#        guard_thresh_uV = 2.55    # zero false alarms, rule 2, file 4 only    
+#        
+#        #det_thresh_uV = 3.89  # rule=2
+#        #guard_thresh_uV = 1.63 # rule=2
+#        
+#        #for use_detect_rules = 3
+#        #det_thresh_uV = 3.13
+#        #det_thresh_ratio = 3.73
+#else:
+#    det_thresh_uV = 3.0  #det_rule = 2, NFFT = 512
+#    guard_thresh_uV = 1.14 #det_rule = 2, NFFT = 512
+
 # define some default values that will get overwritten in a moment
 t_lim_sec = [0, 0]      # default plot time limits [0,0] will be ignored
 alpha_lim_sec = [0, 0]  # default
@@ -308,7 +328,7 @@ ax1.text(0.025, 0.95,
 
 
 # make time-domain plot of alpha amplitude
-if (use_detect_rules != 2):
+if (use_detect_rules == 1):
     ax = plt.subplot(312, sharex=ax1)
 else:
     ax = plt.subplot(313, sharex=ax1)
@@ -402,7 +422,7 @@ if (alpha_lim_sec[1] != 0):
 
 
 # make time-domain plot of alpha and guard amplitude
-if (use_detect_rules != 2):
+if (use_detect_rules == 1):
     ax = plt.subplot(313, sharex=ax1)
 else:
     ax = plt.subplot(312, sharex=ax1)
@@ -472,15 +492,23 @@ ax1 = plt.subplot(221)
 alpha_bool_inds = (full_t_spec > alpha_lim_sec[0]) & (full_t_spec < alpha_lim_sec[1])
 noise_bool_inds = (full_t_spec > t_lim_sec[0]) & (full_t_spec < t_lim_sec[1]) & ~alpha_bool_inds
 if 0:
-    plt.plot(alpha_max_uVperSqrtBin[alpha_bool_inds], guard_mean_uVperSqrtBin[alpha_bool_inds],'bo', linewidth=2);
-    plt.plot(alpha_max_uVperSqrtBin[noise_bool_inds], guard_mean_uVperSqrtBin[noise_bool_inds],'rs', linewidth=2);
-    plt.xlabel('Alpha Band (uVrms)')
-    plt.ylabel('Guard Band (uVrms)')
-else:
     plt.plot(guard_mean_uVperSqrtBin[alpha_bool_inds],alpha_max_uVperSqrtBin[alpha_bool_inds], 'bo', linewidth=2);
     plt.plot(guard_mean_uVperSqrtBin[noise_bool_inds],alpha_max_uVperSqrtBin[noise_bool_inds], 'rs', linewidth=2);
-    plt.ylabel('Alpha Band (uVrms)')
-    plt.xlabel('Guard Band (uVrms)')
+else:
+    bool_det = (alpha_max_uVperSqrtBin >= det_thresh_uV) & (guard_mean_uVperSqrtBin < guard_thresh_uV)
+    bool_inds = alpha_bool_inds & bool_det
+    plt.plot(guard_mean_uVperSqrtBin[bool_inds],alpha_max_uVperSqrtBin[bool_inds], 'bo', linewidth=2);
+    bool_inds = noise_bool_inds & bool_det
+    plt.plot(guard_mean_uVperSqrtBin[bool_inds],alpha_max_uVperSqrtBin[bool_inds], 'ro', linewidth=2);
+    
+    bool_inds = alpha_bool_inds & ~bool_det
+    plt.plot(guard_mean_uVperSqrtBin[bool_inds],alpha_max_uVperSqrtBin[bool_inds], 'bx', linewidth=2, markeredgewidth=1.5);
+    bool_inds = noise_bool_inds & ~bool_det
+    plt.plot(guard_mean_uVperSqrtBin[bool_inds],alpha_max_uVperSqrtBin[bool_inds], 'rx', linewidth=2, markeredgewidth=1.5);
+    
+    
+plt.ylabel('Alpha Band (uVrms)')
+plt.xlabel('Guard Band (uVrms)')
 
 plt.title(fname[12:])
 if 0:
@@ -549,13 +577,13 @@ for Iplot in range(2):
     if Iplot==0:
         all_use_rule = np.array([use_detect_rules])
     else:
-        all_use_rule = np.array([1, 2, 3])  
+        all_use_rule = np.array([1, 2])  
 
     for Irule in range(all_use_rule.size):
         use_rule = all_use_rule[Irule]
     
-        thresh1 = np.arange(0.0,6.0,0.1)
-        thresh2 = np.arange(0.0,6.0,0.1)
+        thresh1 = np.arange(0.0,5.0,0.05)
+        thresh2 = np.arange(0.0,5.0,0.025)
         N_true = np.zeros([thresh1.size, thresh2.size])
         N_false = np.zeros([thresh1.size, thresh2.size])
         bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
@@ -579,59 +607,105 @@ for Iplot in range(2):
                 N_false[I1,I2] = np.count_nonzero(bool_false)
         
         # find best N_true for each value of N_false
-        plot_N_false = np.arange(0,40,1)
+        plot_N_false = np.arange(0,200,1)
         if Irule==0:
             plot_best_N_true = np.zeros([plot_N_false.size,all_use_rule.size])
+            plot_best_thresh1 = np.zeros(plot_best_N_true.shape)
+            plot_best_thresh2 = np.zeros(plot_best_N_true.shape)
         for I_N_false in range(plot_N_false.size):
             bool = (N_false == plot_N_false[I_N_false]);
             if np.any(bool):
                 plot_best_N_true[I_N_false,Irule] = np.max(N_true[bool])
+                
+                foo = np.copy(N_true)
+                foo[~bool] = 0.0  # some small value to all values at a different N_false
+                inds = np.unravel_index(np.argmax(foo), foo.shape)
+                plot_best_thresh1[I_N_false, Irule] = thresh1[inds[0]]
+                plot_best_thresh2[I_N_false, Irule] = thresh2[inds[1]]
             
             # never be smaller than the previous value
             if (I_N_false > 0):
                 if (plot_best_N_true[I_N_false-1,Irule] > plot_best_N_true[I_N_false,Irule]):
-                    plot_best_N_true[I_N_false,Irule] = plot_best_N_true[I_N_false-1,Irule]
+                    plot_best_N_true[I_N_false,Irule] = plot_best_N_true[I_N_false-1, Irule]
+                    plot_best_thresh1[I_N_false,Irule] = plot_best_thresh1[I_N_false-1, Irule]
+                    plot_best_thresh2[I_N_false,Irule] = plot_best_thresh2[I_N_false-1, Irule]
         
         
     plt.subplot(223+Iplot)
     if Iplot==0:
-        plt.plot(N_false,N_true/sum(bool_inTrueTime)*100,'bo')
+        plt.plot(N_false,N_true/np.count_nonzero(bool_inTrueTime)*100,'go')
         plt.plot(plot_N_false, plot_best_N_true/sum(bool_inTrueTime)*100, 'g', linewidth=3)
         plt.title('Detection Rules ' + str(use_detect_rules) )       
+        if (use_detect_rules == 2):
+            plt.title('Detection Rule: Alpha + Guard')
     else:
         plt.plot(plot_N_false, plot_best_N_true/sum(bool_inTrueTime)*100, linewidth=3)
-        plt.legend(('Rule 1','Rule 2','Rule 3'),loc=4,fontsize='medium')
+        
+        if (all_use_rule.size == 2):
+            plt.legend(('Alpha Only','Alpha + Guard'),loc=4,fontsize='medium')
+        else:
+            plt.legend(('Rule 1','Rule 2','Rule 3'),loc=4,fontsize='medium')
         plt.title(fname[12:])
         
-    plt.xlabel('N_False')
+    plt.xlabel('Number of Incorrect Detections')
     plt.ylabel('Fraction of Eyes-Closed Data\nCorrectly Detected (%)')
     plt.xlim([0, 30])
     plt.ylim([0, 100])
 
 
-#
-## plot ratio of alpha to guard
-#ax = plt.subplot(224)
-#plt.plot(full_t_spec,ratio,'.-')
-#plt.ylabel('Ratio Alpha / Guard (uVrms/uVrms)')
-#plt.xlabel('Time (sec)')
-#plt.title(fname[12:])
-#plt.xlim([t_sec[0], t_sec[-1]])
-#plt.ylim([0, 14])
-#if (t_lim_sec[2-1] != 0):
-#    plt.xlim(t_lim_sec)
-#
-##add detected points
-#bool_ind = (alpha_max_uVperSqrtBin > det_thresh_uV) & (ratio > det_thresh_ratio)
-#plt.plot(full_t_spec[bool_ind],ratio[bool_ind],'ro',linewidth=2)
-#
-## add lines showing alpha time
-#if (alpha_lim_sec[1] != 0):
-#    plt.plot(alpha_lim_sec[0]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=3);
-#    plt.plot(alpha_lim_sec[1]*np.array([1, 1]), ax.get_ylim(), 'k--', linewidth=3);
-#
-#if (det_thresh_ratio > 0.0):
-#    plt.plot(ax.get_xlim(),det_thresh_ratio * np.array([1, 1]),'r--',linewidth=2)
-
 
 plt.tight_layout()
+
+# %% plot contour
+if (all_use_rule[-1]==2):
+    fig = plt.figure(figsize=(12, 8.25))  # make new figure, set size in inches
+    ax1 = plt.subplot(221)
+    dots = np.arange(0,5,0.25)
+    for val in dots:
+        plt.plot(val*np.ones(dots.size),dots,'k.',markersize=2)
+    CS = plt.contour(thresh1,thresh2,np.transpose(N_true/np.count_nonzero(bool_inTrueTime)*100.0),
+                     [20, 40, 60, 80, 95],linewidths=2)
+    plt.xlim([0, 5])
+    plt.ylim([0, 5])
+    h = plt.clabel(CS, inline=1, fontsize=12,fmt='%3.0f%%')
+    for txt in h:
+        txt.set_backgroundcolor('white')
+        txt.set_weight('bold')
+    plt.xlabel('Alpha Band Detection Threshold (uVrms)')
+    plt.ylabel('Guard Band Rejection\nThreshold (uVrms)')
+    plt.title('Fraction of Alpha Correctly Detected\n' + fname[12:])
+    #bool_ind = (plot_N_false <= contours[-1])
+    
+    false_contours = [0, 3, 10, 30, 100]
+    #plt.plot(plot_best_thresh1[np.array(contours),-1],plot_best_thresh2[np.array(contours),-1],'ko-',linewidth=2)
+    plt.plot(det_thresh_uV,guard_thresh_uV,'kx', markeredgewidth=3.0,markersize=8)
+    
+    ax = plt.subplot(222)
+    for val in dots:
+        plt.plot(val*np.ones(dots.size),dots,'k.',markersize=2)
+    CS = plt.contour(thresh1,thresh2, np.transpose(N_false),false_contours,linewidths=2)
+    plt.xlim([0 ,5])
+    plt.ylim([0, 5])
+    h = plt.clabel(CS, inline=1, fontsize=12,fmt='%3.0f')
+    for txt in h:
+        txt.set_backgroundcolor('white')
+        txt.set_weight('bold')
+    plt.xlabel('Alpha Band Detection Threshold (uVrms)')
+    plt.ylabel('Guard Band Rejection\nThreshold (uVrms)')
+    plt.title('Number of Incorrect Detections\n' + fname[12:])
+    #bool_ind = (plot_N_false <= contours[-1])
+    #plt.plot(plot_best_thresh1[np.array(false_contours),-1],plot_best_thresh2[np.array(false_contours),-1],'ko-',linewidth=2)
+    plt.plot(det_thresh_uV,guard_thresh_uV,'kx', markeredgewidth=3.0, markersize=8)
+    
+
+    
+    ax = plt.subplot(223)
+    plt.plot(plot_N_false,plot_best_thresh1[:,1],plot_N_false,plot_best_thresh2[:,1],linewidth=2)
+    plt.legend(('Alpha Threshold','Guard Threshold'),loc=4,fontsize='medium')
+    plt.xlabel('Number of Incorrect Detections')
+    plt.ylabel('Threshold Value (uVrms)')
+    plt.xlim([0, 30])
+    plt.title('Threshold Values Yielding Highest Sensitivty')
+
+
+    plt.tight_layout()
