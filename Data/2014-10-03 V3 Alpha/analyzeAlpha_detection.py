@@ -1,9 +1,8 @@
 
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
 import numpy as np
-from scipy import signal
-
+from helperFunctions import loadAndFilterData, convertToFreqDomain, assessAlphaAndGuard, findTrueAndFalseDetections
+ 
 
 # some program constants
 fs_Hz = 250.0   # assumed sample rate for the EEG data
@@ -11,6 +10,7 @@ f_lim_Hz = [0, 30]      # frequency limits for plotting
 
 # frequency-based processing parameters
 NFFT = 256      # pick the length of the fft
+overlap = NFFT - 50  # fixed step of 50 points
 alpha_band_Hz = np.array([7.5, 11.5])   # where to look for the alpha peak
 noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
 guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
@@ -43,7 +43,7 @@ det_thresh_ratio = 3.5
 
 # define some default values that will get overwritten in a moment
 t_lim_sec = [0, 0]      # default plot time limits [0,0] will be ignored
-alpha_lim_sec = [0, 0]  # default
+alpha_lim_sec = [[0, 0]]  # default
 t_other_sec = [0, 0]    # default
 
 # define which data to load
@@ -52,81 +52,60 @@ pname = 'SavedData/'
 if (case == 1):
     fname = 'openBCI_raw_2014-10-04_18-50-20_RightForehead_countebackby3.txt'
     t_lim_sec = [0, 138]
-    alpha_lim_sec = [37.5, 51.7]
+    alpha_lim_sec = [[37.5, 51.7],[107.8, 110.0]]
 elif (case == 2):
     fname = 'openBCI_raw_2014-10-04_18-55-41_O1_Alpha.txt'
     #t_lim_sec = [0, 85]
-    t_lim_sec = [30, 91]
-    alpha_lim_sec = [53, 80]
+    t_lim_sec = [2, 91]
+    alpha_lim_sec = [[11.5, 30.8], [53, 80.8]]
 elif (case == 3):
     fname = 'openBCI_raw_2014-10-04_19-06-13_O1_Alpha.txt'
-    t_lim_sec = [15, 83]
+    t_lim_sec = [2, 83]
     #alpha_lim_sec = [58-2, 76+2]  
-    alpha_lim_sec = [45, 76+2]
+    alpha_lim_sec = [[45, 76+2]]
 elif (case == 4):
     fname = 'openBCI_raw_2014-10-05_17-14-45_O1_Alpha_noCaffeine.txt'
-    t_lim_sec = [50, 125]
+    t_lim_sec = [50, 125]  # could go [10, 125]
     if 1:
         #normal analysis
-        alpha_lim_sec = [87.75, 118.5]
+        alpha_lim_sec = [[87.75, 118.5]]
     else:
         #compare eyes-closed to interference
-        alpha_lim_sec = [108.0, 112.0]
+        alpha_lim_sec = [[108.0, 112.0]]
         t_other_sec = [120.0, 124.0]  # burst of interference
+elif (case == 5):
+    pname = "../2014-05-31 RobotControl/SavedData/"
+    fname = "openBCI_raw_2014-05-31_20-57-51_Robot05.txt"
+    t_lim_sec = [100, 210]
+    alpha_lim_sec = [[116, 123]]
+elif (case == 6):
+    pname = "../2014-05-08 Multi-Rate Visual Evoked Potentials/SavedData/"
+    fname = "openBCI_raw_2014-05-08_20-26-47_EyesClosedSeperates_Left_Right_Left_Right_Both.txt"    
+    if 0:
+        t_lim_sec = [10, 150]
+        alpha_lim_sec = [[24, 58], [87, 115]]  # list in a list...so there can be more than one time span
+    else:
+        t_lim_sec = [133, 307]
+        alpha_lim_sec = [[152, 167], [199, 212], [241, 264], [273.5, 295.2]]
+    
 
 
-# load data into numpy array
-data = np.loadtxt(pname + fname,
-                  delimiter=',',
-                  skiprows=5)
 
-# parse the data
-data_indices = data[:, [0]]  # the first column is the packet index
-eeg_data_uV = data[:, [2]]       # the 3rd column is EEG channel 2
+# load and filter
+f_eeg_data_uV = loadAndFilterData(pname+fname, fs_Hz)
+t_sec = (np.arange(f_eeg_data_uV.size))/fs_Hz
 
-# filter the data to remove DC
-hp_cutoff_Hz = 1.0
-b, a = signal.butter(2, hp_cutoff_Hz/(fs_Hz / 2.0), 'highpass')  # define the filter
-f_eeg_data_uV = signal.lfilter(b, a, eeg_data_uV, 0) # apply along the zeroeth dimension
-
-# notch filter the data to remove 60 Hz and 120 Hz
-notch_freq_Hz = np.array([60.0, 120.0])  # these are the center frequencies
-for freq_Hz in np.nditer(notch_freq_Hz):  # loop over each center freq
-    bp_stop_Hz = freq_Hz + 3.0*np.array([-1, 1])  # set the stop band
-    b, a = signal.butter(3, bp_stop_Hz/(fs_Hz / 2.0), 'bandstop')  # create the filter
-    f_eeg_data_uV = signal.lfilter(b, a, f_eeg_data_uV, 0)  # apply along the zeroeth dimension
-
-
-# make sine wave to test the scaling
-#f_eeg_data_uV = np.sin(2.0*np.pi*(fs_Hz / (NFFT-1))*10.0*1.0*t_sec)
-#f_eeg_data_uV = np.sqrt(2)*f_eeg_data_uV * np.sqrt(2.0)
-
-# %% MAIN PLOTS
-t_sec = np.array(range(0, f_eeg_data_uV.size)) / fs_Hz
-
-# compute spectrogram
-fig = plt.figure(figsize=(7.5, 9.25))  # make new figure, set size in inches
-ax1 = plt.subplot(311)
-overlap = NFFT - 50  # fixed step of 50 points
-spec_PSDperHz, freqs, t_spec = mlab.specgram(np.squeeze(f_eeg_data_uV),
-                               NFFT=NFFT,
-                               window=mlab.window_hanning,
-                               Fs=fs_Hz,
-                               noverlap=overlap
-                               ) # returns PSD power per Hz
-                               
-# convert the units of the spectral data
-spec_PSDperBin = spec_PSDperHz * fs_Hz / float(NFFT)  # convert to "per bin"
-del spec_PSDperHz  # remove this variable so that I don't mistakenly use it
-
-# reduce size of spectrogram data to speed plotting,
-# but keep high-resolution data for later analysis
-full_spec_PSDperBin = spec_PSDperBin
-full_t_spec = t_spec
+# convert to frequency domain
+full_spec_PSDperBin, full_t_spec, freqs = convertToFreqDomain(f_eeg_data_uV, fs_Hz, NFFT, overlap)
 spec_PSDperBin = full_spec_PSDperBin[:, 1:-1:2]  # get every other time slice
 t_spec = full_t_spec[1:-1:2]  # get every other time slice
 
+
+# %% FIRST PLOT
+fig = plt.figure(figsize=(7.5, 9.25))  # make new figure, set size in inches
+
 # make the spectrogram plot
+ax1 = plt.subplot(311)
 plt.pcolor(t_spec, freqs, 10*np.log10(spec_PSDperBin))  # dB re: 1 uV
 plt.clim(25-5+np.array([-40, 0]))
 plt.xlim(t_sec[0], t_sec[-1])
@@ -136,7 +115,6 @@ plt.ylim(f_lim_Hz)
 plt.xlabel('Time (sec)')
 plt.ylabel('Frequency (Hz)')
 plt.title(fname[12:])
-
 
 
 # add annotation for FFT Parameters
@@ -150,10 +128,11 @@ ax1.text(0.025, 0.95,
         size='smaller')
 
 
-
 # find spectra that are in our time span
 foo_spec = spec_PSDperBin
-bool_ind = ((t_spec >= alpha_lim_sec[0]) & (t_spec <= alpha_lim_sec[1]))
+bool_ind = np.zeros(t_spec.shape, dtype='bool')
+for lim_sec in alpha_lim_sec:
+    bool_ind = bool_ind | ((t_spec >= lim_sec[0]) & (t_spec <= lim_sec[1]))
 foo_spec = foo_spec[:, bool_ind]
    
 # get the mean spectra and convert from PSD to uVrms
@@ -162,12 +141,13 @@ mean_spectra_uVrmsPerSqrtBin = np.sqrt(mean_spectra_PSDperBin)
 
 # show the eyes-closed alpha period
 yl = ax1.get_ylim()
-plt.plot(alpha_lim_sec[0]*np.array([1, 1]), yl, 'w--', linewidth=3)
-plt.plot(alpha_lim_sec[1]*np.array([1, 1]), yl, 'w--', linewidth=3)
-ax1.text(np.mean(alpha_lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
-         verticalalignment='top',
-         horizontalalignment='center',
-         backgroundcolor='w')
+for lim_sec in alpha_lim_sec:
+    plt.plot(lim_sec[0]*np.array([1, 1]), yl, 'w--', linewidth=3)
+    plt.plot(lim_sec[1]*np.array([1, 1]), yl, 'w--', linewidth=3)
+    ax1.text(np.mean(lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
+             verticalalignment='top',
+             horizontalalignment='center',
+             backgroundcolor='w')
   
 # show the "other" period
 if (t_other_sec[1] != 0):
@@ -197,7 +177,7 @@ for Iplot in [0, 1]:
     #plot all frequencies
     plt.plot(freqs, mean_spectra_uVrmsPerSqrtBin, 'k.-',linewidth=2)
     plt.xlim(f_lim_Hz)
-    plt.ylim([0, 6])
+    plt.ylim([0, 5])
     plt.xlabel('Frequency (Hz)')
     plt.ylabel('RMS Amplitude\n(uV per sqrt(Bin))')    
     plt.title('Mean Spectrum for "Eyes Closed" EEG Data')
@@ -297,14 +277,15 @@ plt.title(fname[12:])
 
  
 # add lines showing alpha time
-if (alpha_lim_sec[1] != 0):
+if (alpha_lim_sec[0][0] != 0):
     yl = ax1.get_ylim()
-    plt.plot(alpha_lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=3)
-    plt.plot(alpha_lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=3)
-    ax1.text(np.mean(alpha_lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
-             verticalalignment='top',
-             horizontalalignment='center',
-             backgroundcolor='w')
+    for lim_sec in alpha_lim_sec:
+        plt.plot(lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=3)
+        plt.plot(lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=3)    
+        ax1.text(np.mean(lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
+                 verticalalignment='top',
+                 horizontalalignment='center',
+                 backgroundcolor='w')
              
 # add alpha and guard bands
 #xl = ax1.get_xlim()
@@ -348,44 +329,54 @@ if (det_thresh_uV > 0.0):
     #add detection threshold
     plt.plot(ax.get_xlim(),det_thresh_uV * np.array([1, 1]),'r--',linewidth=2)
     
+    # find times that are within consideration
+    bool_inTlim = (full_t_spec > t_lim_sec[0]) & (full_t_spec < t_lim_sec[1])
+    bool_inAlphaLim = np.zeros(full_t_spec.size,dtype='bool')
+    for lim_sec in alpha_lim_sec:
+        bool_inAlphaLim = bool_inAlphaLim | ((full_t_spec >= lim_sec[0]) & (full_t_spec <= lim_sec[1]))    
+    
+    # apply detection rules
     if (use_detect_rules == 1):
         # simply based on Alpha amplitude
         detect_txt = "Detect If > " + str(det_thresh_uV) + " uVrms"
-        bool_ind = ((alpha_max_uVperSqrtBin >= det_thresh_uV) & ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])))
-        plt.plot(full_t_spec[bool_ind],
-                 alpha_max_uVperSqrtBin[bool_ind],
+        bool_ind_det_all = alpha_max_uVperSqrtBin >= det_thresh_uV
+        bool_ind_det = bool_ind_det_all & bool_inTlim
+        plt.plot(full_t_spec[bool_ind_det],
+                 alpha_max_uVperSqrtBin[bool_ind_det],
                  'ro', linewidth=3)
+        bool_ind_rej_all = np.zeros(full_tspec.size,dtype='bool')
     elif (use_detect_rules==2):
         # Alpha amplitude with guard rejection
         detect_txt = ("Detect If Alpha > " + str(det_thresh_uV) + " uVrms\n" +
                       "and Guard < "+ str(guard_thresh_uV) + " uVrms")
-        bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) &
-                     (guard_mean_uVperSqrtBin > guard_thresh_uV) &
-                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
-        plt.plot(full_t_spec[bool_ind],
-                 alpha_max_uVperSqrtBin[bool_ind],
+        bool_ind_rej_all = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) &
+                             (guard_mean_uVperSqrtBin > guard_thresh_uV) )
+        bool_ind_rej = bool_ind_rej_all & bool_inTlim                 
+        
+        plt.plot(full_t_spec[bool_ind_rej],
+                 alpha_max_uVperSqrtBin[bool_ind_rej],
                  'gx', markeredgewidth=2)
-        bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) & 
-                     (guard_mean_uVperSqrtBin < guard_thresh_uV) &
-                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
-        plt.plot(full_t_spec[bool_ind],
-                 alpha_max_uVperSqrtBin[bool_ind],
+        bool_ind_det_all = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) & 
+                             (guard_mean_uVperSqrtBin < guard_thresh_uV) )
+        bool_ind_det = bool_ind_det_all & bool_inTlim
+        plt.plot(full_t_spec[bool_ind_det],
+                 alpha_max_uVperSqrtBin[bool_ind_det],
                  'ro', linewidth=2)
     elif (use_detect_rules==3):
         # Alpha amplitude with alpha/guard ratio requirement
         detect_txt = ("Detect If Alpha > " + str(det_thresh_uV) + " uVrms\n" +
                       "and Alpha/Guard Ratio > "+ str(det_thresh_ratio))
-        bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) &
-                     (ratio < det_thresh_ratio) &
-                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
-        plt.plot(full_t_spec[bool_ind],
-                 alpha_max_uVperSqrtBin[bool_ind],
+        bool_ind_rej_all = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) &
+                             (ratio < det_thresh_ratio) )
+        bool_ind_rej = bool_ind_rej_all & bool_inTlim
+        plt.plot(full_t_spec[bool_ind_rej],
+                 alpha_max_uVperSqrtBin[bool_ind_rej],
                  'gx', markeredgewidth=2)
-        bool_ind = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) & 
-                     (ratio > det_thresh_ratio) &
-                     ((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])) )
-        plt.plot(full_t_spec[bool_ind],
-                 alpha_max_uVperSqrtBin[bool_ind],
+        bool_ind_det_all = ( (alpha_max_uVperSqrtBin >= det_thresh_uV) & 
+                             (ratio > det_thresh_ratio) ) 
+        bool_ind_det = bool_ind_det_all & bool_inTlim                   
+        plt.plot(full_t_spec[bool_ind_det],
+                 alpha_max_uVperSqrtBin[bool_ind_det],
                  'ro', linewidth=2)               
     
     # describe type of detection logic
@@ -396,26 +387,27 @@ if (det_thresh_uV > 0.0):
             backgroundcolor='w')
     
     # declare sensitivity and false alarms
-    I_trueDetect = bool_ind & ((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
-    n_good = sum(I_trueDetect)
-    I_falseDetect = (full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])
-    n_eyes_closed = sum(I_falseDetect)
-    n_bad = sum(bool_ind & ~((full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1])))
-    n_eyes_open = sum((full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1]) & ~(full_t_spec >= alpha_lim_sec[0]) & (full_t_spec <= alpha_lim_sec[1]))
+    I_trueDetect = bool_ind_det_all & bool_inAlphaLim & bool_inTlim
+    n_good = np.count_nonzero(I_trueDetect)
+    n_eyes_closed = np.count_nonzero(bool_inAlphaLim)
+    I_falseDetect = bool_ind_det_all & ~bool_inAlphaLim & bool_inTlim
+    n_bad = np.count_nonzero(I_falseDetect)
+    n_eyes_open = np.count_nonzero(bool_inTlim & ~bool_inAlphaLim)
     print "N_true = " + str(n_good)
     print "N_eyes_closed = " + str(n_eyes_closed)
     print "N_false = " + str(n_bad)
     print "N_eyes_open = " + str(n_eyes_open)
             
-# add lines showing alpha time
-if (alpha_lim_sec[1] != 0):
-    yl = ax.get_ylim()
-    plt.plot(alpha_lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=3)
-    plt.plot(alpha_lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=3)
-    ax.text(np.mean(alpha_lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
-            verticalalignment='top',
-            horizontalalignment='center',
-            backgroundcolor='w')
+# add lines showing alpha time            
+if (alpha_lim_sec[0][0] != 0):
+    yl = ax1.get_ylim()
+    for lim_sec in alpha_lim_sec:
+        plt.plot(lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=3)
+        plt.plot(lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=3)    
+        ax1.text(np.mean(lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
+                 verticalalignment='top',
+                 horizontalalignment='center',
+                 backgroundcolor='w')
 
 # plt.legend(('Sum In-Band', 'Max In-Band'), loc=2, fontsize='medium')
 # plt.legend(['Alpha Band'], loc=2, fontsize='medium')
@@ -467,15 +459,15 @@ if (ythresh > 0.0):
 
 
 # add lines showing alpha time
-if (alpha_lim_sec[1] != 0):
-    yl = ax.get_ylim()
-    plt.plot(alpha_lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=3)
-    plt.plot(alpha_lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=3)
-    ax.text(np.mean(alpha_lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
-            verticalalignment='top',
-            horizontalalignment='center',
-            backgroundcolor='w')
-
+if (alpha_lim_sec[0][0] != 0):
+    yl = ax1.get_ylim()
+    for lim_sec in alpha_lim_sec:
+        plt.plot(lim_sec[0]*np.array([1, 1]), yl, 'k--', linewidth=3)
+        plt.plot(lim_sec[1]*np.array([1, 1]), yl, 'k--', linewidth=3)    
+        ax1.text(np.mean(lim_sec), yl[1]-0.05*(yl[1]-yl[0]), 'Eyes Closed',
+                 verticalalignment='top',
+                 horizontalalignment='center',
+                 backgroundcolor='w')
 
 
 # plt.legend(['Guard Band'], loc=2, fontsize='medium')
@@ -489,8 +481,10 @@ plt.tight_layout()
 # %% discriminator
 fig = plt.figure(figsize=(12, 8.25))  # make new figure, set size in inches
 ax1 = plt.subplot(221)
-alpha_bool_inds = (full_t_spec > alpha_lim_sec[0]) & (full_t_spec < alpha_lim_sec[1])
-noise_bool_inds = (full_t_spec > t_lim_sec[0]) & (full_t_spec < t_lim_sec[1]) & ~alpha_bool_inds
+#alpha_bool_inds = (full_t_spec > alpha_lim_sec[0]) & (full_t_spec < alpha_lim_sec[1])
+alpha_bool_inds = bool_inAlphaLim 
+#noise_bool_inds = (full_t_spec > t_lim_sec[0]) & (full_t_spec < t_lim_sec[1]) & ~alpha_bool_inds
+noise_bool_inds = bool_inTlim & ~alpha_bool_inds
 if 0:
     plt.plot(guard_mean_uVperSqrtBin[alpha_bool_inds],alpha_max_uVperSqrtBin[alpha_bool_inds], 'bo', linewidth=2);
     plt.plot(guard_mean_uVperSqrtBin[noise_bool_inds],alpha_max_uVperSqrtBin[noise_bool_inds], 'rs', linewidth=2);
@@ -521,7 +515,7 @@ else:
     #plt.xlim([0, 12])
     #plt.ylim([0, 8])
     plt.ylim([0, 10])
-    plt.xlim([0, 6])
+    plt.xlim([0, 5])
 
 # add original threshold
 #plt.plot(det_thresh_uV * np.array([1, 1]),ax.get_ylim(), 'k--',linewidth=2)
@@ -583,11 +577,11 @@ for Iplot in range(2):
         use_rule = all_use_rule[Irule]
     
         thresh1 = np.arange(0.0,5.0,0.05)
-        thresh2 = np.arange(0.0,5.0,0.025)
+        thresh2 = np.arange(0.0,5.0,0.05)
         N_true = np.zeros([thresh1.size, thresh2.size])
         N_false = np.zeros([thresh1.size, thresh2.size])
         bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
-        bool_inTrueTime = (full_t_spec[bool_inTime] >= alpha_lim_sec[0]) & (full_t_spec[bool_inTime] <= alpha_lim_sec[1])
+        bool_inTrueTime = bool_inAlphaLim[bool_inTime]
         for I1 in range(thresh1.size):
             
             bool_alpha_thresh = (alpha_max_uVperSqrtBin > thresh1[I1])
@@ -660,7 +654,7 @@ plt.tight_layout()
 if (all_use_rule[-1]==2):
     fig = plt.figure(figsize=(12, 8.25))  # make new figure, set size in inches
     ax1 = plt.subplot(221)
-    dots = np.arange(0,5,0.25)
+    dots = np.arange(0,6,0.25)
     for val in dots:
         plt.plot(val*np.ones(dots.size),dots,'k.',markersize=2)
     CS = plt.contour(thresh1,thresh2,np.transpose(N_true/np.count_nonzero(bool_inTrueTime)*100.0),
@@ -684,7 +678,7 @@ if (all_use_rule[-1]==2):
     for val in dots:
         plt.plot(val*np.ones(dots.size),dots,'k.',markersize=2)
     CS = plt.contour(thresh1,thresh2, np.transpose(N_false),false_contours,linewidths=2)
-    plt.xlim([0 ,5])
+    plt.xlim([0, 5])
     plt.ylim([0, 5])
     h = plt.clabel(CS, inline=1, fontsize=12,fmt='%3.0f')
     for txt in h:

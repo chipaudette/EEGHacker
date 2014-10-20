@@ -1,111 +1,8 @@
 
 import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
 import numpy as np
-from scipy import signal
-
-def loadAndFilterData(full_fname, fs_Hz, t_lim_sec, alpha_lim_sec):
-    # load data into numpy array
-    data = np.loadtxt(pname + fname,
-                      delimiter=',',
-                      skiprows=5)
-    
-    # parse the data
-    data_indices = data[:, [0]]  # the first column is the packet index
-    eeg_data_uV = data[:, [2]]       # the 3rd column is EEG channel 2
-    
-    # filter the data to remove DC
-    hp_cutoff_Hz = 1.0
-    b, a = signal.butter(2, hp_cutoff_Hz/(fs_Hz / 2.0), 'highpass')  # define the filter
-    f_eeg_data_uV = signal.lfilter(b, a, eeg_data_uV, 0) # apply along the zeroeth dimension
-    
-    # notch filter the data to remove 60 Hz and 120 Hz
-    notch_freq_Hz = np.array([60.0, 120.0])  # these are the center frequencies
-    for freq_Hz in np.nditer(notch_freq_Hz):  # loop over each center freq
-        bp_stop_Hz = freq_Hz + 3.0*np.array([-1, 1])  # set the stop band
-        b, a = signal.butter(3, bp_stop_Hz/(fs_Hz / 2.0), 'bandstop')  # create the filter
-        f_eeg_data_uV = signal.lfilter(b, a, f_eeg_data_uV, 0)  # apply along the zeroeth dimension
-    
-    
-    return f_eeg_data_uV
-
-def convertToFreqDomain(f_eeg_data_uV, fs_Hz, NFFT, overlap):
-    
-    # make sine wave to test the scaling
-    #f_eeg_data_uV = np.sin(2.0*np.pi*(fs_Hz / (NFFT-1))*10.0*1.0*t_sec)
-    #f_eeg_data_uV = np.sqrt(2)*f_eeg_data_uV * np.sqrt(2.0)
-    
-    # compute spectrogram
-    #fig = plt.figure(figsize=(7.5, 9.25))  # make new figure, set size in inches
-    #ax1 = plt.subplot(311)
-    spec_PSDperHz, freqs, t_spec = mlab.specgram(np.squeeze(f_eeg_data_uV),
-                                   NFFT=NFFT,
-                                   window=mlab.window_hanning,
-                                   Fs=fs_Hz,
-                                   noverlap=overlap
-                                   ) # returns PSD power per Hz
-                                   
-    # convert the units of the spectral data
-    spec_PSDperBin = spec_PSDperHz * fs_Hz / float(NFFT)  # convert to "per bin"
-    del spec_PSDperHz  # remove this variable so that I don't mistakenly use it
-    
-    
-    return spec_PSDperBin, t_spec, freqs
-
-def assessAlphaAndGuard(full_t_spec, full_spec_PSDperBin, alpha_band_Hz, guard_band_Hz):
-    # compute alpha vs time
-    bool_inds = (freqs > alpha_band_Hz[0]) & (freqs < alpha_band_Hz[1])
-    alpha_max_uVperSqrtBin = np.sqrt(np.amax(full_spec_PSDperBin[bool_inds, :], 0))
-    # alpha_sum_uVrms = np.sqrt(np.sum(full_spec_PSDperBin[bool_inds, :],0))
-    
-    bool_inds = ((freqs > guard_band_Hz[0][0]) & (freqs < guard_band_Hz[0][1]) |
-                 (freqs > guard_band_Hz[1][0]) & (freqs < guard_band_Hz[1][1]))
-    guard_mean_uVperSqrtBin = np.sqrt(np.mean(full_spec_PSDperBin[bool_inds, :], 0))
-    alpha_guard_ratio = alpha_max_uVperSqrtBin / guard_mean_uVperSqrtBin
-    
-    return alpha_max_uVperSqrtBin, guard_mean_uVperSqrtBin, alpha_guard_ratio
-
-def findTrueAndFalseDetections(full_t_spec,
-                               alpha_max_uVperSqrtBin,
-                               guard_mean_uVperSqrtBin,
-                               alpha_guard_ratio,
-                               t_lim_sec,
-                               alpha_lim_sec,
-                               detection_rule_set,
-                               thresh1,
-                               thresh2):
-                               
-    bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
-    bool_inTrueTime = (full_t_spec[bool_inTime] >= alpha_lim_sec[0]) & (full_t_spec[bool_inTime] <= alpha_lim_sec[1])
- 
-    #all three rule sets test the alpha amplitude
-    bool_alpha_thresh = (alpha_max_uVperSqrtBin > thresh1)
-    
-    #the second test changes depending upon the rule set
-    if (detection_rule_set == 1):
-        bool_detect = bool_alpha_thresh[bool_inTime]
-    elif (detection_rule_set == 2):
-        bool_detect = bool_alpha_thresh[bool_inTime] & (guard_mean_uVperSqrtBin[bool_inTime] < thresh2)
-    elif (detection_rule_set == 3):
-        bool_detect = bool_alpha_thresh[bool_inTime] & (alpha_guard_ratio[bool_inTime] > thresh2)
-    elif (detection_rule_set == 4):
-        bool_alpha_thresh[3:-1] = bool_alpha_thresh[1:-3] | bool_alpha_thresh[2:-2] | bool_alpha_thresh[3:-1]  #copy "true" to next time as well
-        bool_guard = guard_mean_uVperSqrtBin < thresh2
-        bool_guard[3:-1] = bool_guard[1:-3] & bool_guard[2:-2] & bool_guard[3:-1]  #copy "false" to next time as well
-        bool_detect = bool_alpha_thresh[bool_inTime] & bool_guard[bool_inTime]
-            
+from helperFunctions import loadAndFilterData, convertToFreqDomain, assessAlphaAndGuard, findTrueAndFalseDetections
         
-    #count true or false detections
-    bool_true = bool_detect & bool_inTrueTime
-    N_true = np.count_nonzero(bool_true)
-    N_possible = np.count_nonzero(bool_inTrueTime)  #number of potential True detections
-    bool_false = bool_detect & ~bool_inTrueTime
-    N_false = np.count_nonzero(bool_false)
-    
-    
-    return N_true, N_false, N_possible, bool_true, bool_false, bool_inTrueTime
-                
-                
 
 # some program constants
 fs_Hz = 250.0   # assumed sample rate for the EEG data
@@ -125,19 +22,19 @@ all_use_rule = np.array([1, 2, 3, 4])  # detection rules
 #thresh1 = np.arange(0.0,6.0,0.05)  #threshold for alpha amplitude
 #thresh2 = np.arange(0.0,6.0,0.05)  #threshold for guard amplitude, or alpha_guard_ratio
 thresh1 = np.arange(0.0,10.0,0.1)  #threshold for alpha amplitude
-thresh2 = np.arange(0.0,10.0,0.1)  #threshold for guard amplitude, or alpha_guard_ratio
+thresh2 = np.arange(0.0,6.0,0.05)  #threshold for guard amplitude, or alpha_guard_ratio
 N_true = np.zeros([thresh1.size, thresh2.size, all_use_rule.size])
 N_false = np.zeros([thresh1.size, thresh2.size, all_use_rule.size])
 N_possible = np.zeros([all_use_rule.size, 1])
 
 # loop over each data file
-filesToProcess = np.array([1, 2, 3, 4])
+filesToProcess = np.array([1, 2, 3, 4, 5, 6])
 for Ifile in range(filesToProcess.size):
     print "Processing " + str(Ifile+1) + " of " + str(filesToProcess.size)    
     
     # define some default values that will get overwritten in a moment
     t_lim_sec = [0, 0]      # default plot time limits [0,0] will be ignored
-    alpha_lim_sec = [0, 0]  # default
+    alpha_lim_sec = [[0, 0]]  # default
     t_other_sec = [0, 0]    # default
     
     # define which data to load
@@ -146,38 +43,43 @@ for Ifile in range(filesToProcess.size):
     if (case == 1):
         fname = 'openBCI_raw_2014-10-04_18-50-20_RightForehead_countebackby3.txt'
         t_lim_sec = [0, 138]
-        alpha_lim_sec = [37.5, 51.7]
+        alpha_lim_sec = [[37.5, 51.7],[107.8, 110.0]]
     elif (case == 2):
         fname = 'openBCI_raw_2014-10-04_18-55-41_O1_Alpha.txt'
         #t_lim_sec = [0, 85]
-        t_lim_sec = [30, 91]
-        alpha_lim_sec = [53, 80]
+        t_lim_sec = [2, 91]
+        alpha_lim_sec = [[11.5, 30.8], [53, 80.8]]
     elif (case == 3):
         fname = 'openBCI_raw_2014-10-04_19-06-13_O1_Alpha.txt'
-        t_lim_sec = [15, 83]
+        t_lim_sec = [2, 83]
         #alpha_lim_sec = [58-2, 76+2]  
-        alpha_lim_sec = [45, 76+2]
+        alpha_lim_sec = [[45, 76+2]]
     elif (case == 4):
         fname = 'openBCI_raw_2014-10-05_17-14-45_O1_Alpha_noCaffeine.txt'
-        t_lim_sec = [50, 125]
-        if 1:
-            #normal analysis
-            alpha_lim_sec = [87.75, 118.5]
-        else:
-            #compare eyes-closed to interference
-            alpha_lim_sec = [108.0, 112.0]
-            t_other_sec = [120.0, 124.0]  # burst of interference
+        t_lim_sec = [50, 125]  # could go [10, 125]
+        alpha_lim_sec = [[87.75, 118.5]]
+    elif (case == 5):
+        pname = "../2014-05-31 RobotControl/SavedData/"
+        fname = "openBCI_raw_2014-05-31_20-57-51_Robot05.txt"
+        t_lim_sec = [100, 210]
+        alpha_lim_sec = [[116, 123]]
+    elif (case == 6):
+        pname = "../2014-05-08 Multi-Rate Visual Evoked Potentials/SavedData/"
+        fname = "openBCI_raw_2014-05-08_20-26-47_EyesClosedSeperates_Left_Right_Left_Right_Both.txt"    
+        t_lim_sec = [133, 307]
+        alpha_lim_sec = [[152, 167], [199, 212], [241, 264], [273.5, 295.2]]
+    
     
     # %% load and process data
     
     # load and filter
-    f_eeg_data_uV = loadAndFilterData(pname+fname, fs_Hz, t_lim_sec, alpha_lim_sec)
+    f_eeg_data_uV = loadAndFilterData(pname+fname, fs_Hz)
     
     # convert to frequency domain
     full_spec_PSDperBin, full_t_spec, freqs = convertToFreqDomain(f_eeg_data_uV, fs_Hz, NFFT, overlap)
     
     # focus on Alpha and guard bands
-    alpha_max_uVperSqrtBin, guard_mean_uVperSqrtBin, alpha_guard_ratio = assessAlphaAndGuard(full_t_spec, full_spec_PSDperBin, alpha_band_Hz, guard_band_Hz)
+    alpha_max_uVperSqrtBin, guard_mean_uVperSqrtBin, alpha_guard_ratio = assessAlphaAndGuard(full_t_spec, freqs, full_spec_PSDperBin, alpha_band_Hz, guard_band_Hz)
     
     # process using the pre-defined detection rules
     for Irule in range(all_use_rule.size):
@@ -188,7 +90,10 @@ for Ifile in range(filesToProcess.size):
         N_true_foo = np.zeros([thresh1.size, thresh2.size])
         N_false_foo = np.zeros([thresh1.size, thresh2.size])
         bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
-        bool_inTrueTime = (full_t_spec[bool_inTime] >= alpha_lim_sec[0]) & (full_t_spec[bool_inTime] <= alpha_lim_sec[1])
+        bool_inTrueTime = np.zeros(full_t_spec.shape,dtype='bool')
+        for lim_sec in alpha_lim_sec:
+            bool_inTrueTime = bool_inTrueTime | ((full_t_spec >= lim_sec[0]) & (full_t_spec <= lim_sec[1]))    
+        bool_inTrueTime =bool_inTrueTime[bool_inTime]
         for I1 in range(thresh1.size):
             for I2 in range(thresh2.size):
                 #count detections
@@ -263,21 +168,22 @@ else:
     plt.title("Number of EEG Recordings = " + str(filesToProcess.size))
 plt.xlabel('N_False')
 plt.ylabel('Fraction of Eyes-Closed Data\nCorrectly Detected (%)')
-plt.xlim([0, 50])
+max_N_false = 200
+plt.xlim([0, max_N_false])
 plt.ylim([0, 100.5])
 
 plt.subplot(312)
 plt.plot(plot_N_false, plot_best_thresh1, linewidth=3)
 plt.xlabel('N_False')
 plt.ylabel('Best Alpha Threshold\n(uVrms)')
-plt.xlim([0, 50])
+plt.xlim([0, max_N_false])
 plt.ylim([0, 5])
 
 plt.subplot(313)
 plt.plot(plot_N_false, plot_best_thresh2, linewidth=3)
 plt.xlabel('N_False')
 plt.ylabel('Best Thresh Rule 2\n(uVrms or Ratio)')
-plt.xlim([0, 50])
+plt.xlim([0, max_N_false])
 plt.ylim([0, 5])
 
 
