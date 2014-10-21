@@ -105,3 +105,36 @@ def findTrueAndFalseDetections(full_t_spec,
     
     
     return N_true, N_false, N_possible, bool_true, bool_false, bool_inTrueTime
+
+def computeROC(N_true, N_false, N_possible, thresh1, thresh2, plot_N_false):
+    n_col_out = N_true.shape[3-1]
+    plot_best_N_true = np.zeros([plot_N_false.size,n_col_out])
+    plot_best_N_frac = np.zeros(plot_best_N_true.shape)
+    plot_best_thresh1 = np.zeros(plot_best_N_true.shape)
+    plot_best_thresh2 = np.zeros(plot_best_N_true.shape)
+    for Icol in range(n_col_out):
+        N_true_foo = N_true[:, :, Icol] 
+        N_false_foo = N_false[:, :, Icol]
+        
+        for I_N_false in range(plot_N_false.size):
+            bool = (N_false_foo == plot_N_false[I_N_false]);
+            if np.any(bool):
+                
+                plot_best_N_true[I_N_false, Icol] = np.max(N_true_foo[bool])
+                
+                foo = np.copy(N_true_foo)
+                foo[~bool] = 0.0  # some small value to all values at a different N_false
+                inds = np.unravel_index(np.argmax(foo), foo.shape)
+                plot_best_thresh1[I_N_false, Icol] = thresh1[inds[0]]
+                plot_best_thresh2[I_N_false, Icol] = thresh2[inds[1]]
+                
+            # never be smaller than the previous value
+            if (I_N_false > 0):
+                if (plot_best_N_true[I_N_false-1,Icol] > plot_best_N_true[I_N_false,Icol]):
+                    plot_best_N_true[I_N_false,Icol] = plot_best_N_true[I_N_false-1,Icol]
+                    plot_best_thresh1[I_N_false, Icol] = plot_best_thresh1[I_N_false-1, Icol]
+                    plot_best_thresh2[I_N_false, Icol] = plot_best_thresh2[I_N_false-1, Icol]
+            
+        plot_best_N_frac[:, Icol] = (plot_best_N_true[:, Icol]) / (N_possible[Icol])
+        
+    return plot_best_N_true, plot_best_N_frac, plot_best_thresh1, plot_best_thresh2

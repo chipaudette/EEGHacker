@@ -1,41 +1,12 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-from helperFunctions import loadAndFilterData, convertToFreqDomain, assessAlphaAndGuard, findTrueAndFalseDetections
-        
-
-# some program constants
-fs_Hz = 250.0   # assumed sample rate for the EEG data
-f_lim_Hz = [0, 30]      # frequency limits for plotting
-
-# frequency-based processing parameters
-NFFT = 256      # pick the length of the fft
-overlap = NFFT - 50  # fixed step of 50 points
-alpha_band_Hz = np.array([7.5, 11.5])   # where to look for the alpha peak
-noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
-guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
-
-# detection rule sets to use
-all_use_rule = np.array([1, 2, 3, 4])  # detection rules
-
-# prepare for scanning across all detection thresholds
-#thresh1 = np.arange(0.0,6.0,0.05)  #threshold for alpha amplitude
-#thresh2 = np.arange(0.0,6.0,0.05)  #threshold for guard amplitude, or alpha_guard_ratio
-thresh1 = np.arange(0.0,10.0,0.1)  #threshold for alpha amplitude
-thresh2 = np.arange(0.0,6.0,0.05)  #threshold for guard amplitude, or alpha_guard_ratio
-N_true = np.zeros([thresh1.size, thresh2.size, all_use_rule.size])
-N_false = np.zeros([thresh1.size, thresh2.size, all_use_rule.size])
-N_possible = np.zeros([all_use_rule.size, 1])
-
-# loop over each data file
-filesToProcess = np.array([1, 2, 3, 4, 5, 6])
-for Ifile in range(filesToProcess.size):
-    print "Processing " + str(Ifile+1) + " of " + str(filesToProcess.size)    
-    
-    # define some default values that will get overwritten in a moment
+from helperFunctions import loadAndFilterData, convertToFreqDomain, assessAlphaAndGuard, findTrueAndFalseDetections, computeROC
+   
+def getFileInfo(case):
     t_lim_sec = [0, 0]      # default plot time limits [0,0] will be ignored
     alpha_lim_sec = [[0, 0]]  # default
-    t_other_sec = [0, 0]    # default
+    #t_other_sec = [0, 0]    # default
     
     # define which data to load
     case = filesToProcess[Ifile]  # choose which case to load
@@ -46,13 +17,13 @@ for Ifile in range(filesToProcess.size):
         alpha_lim_sec = [[37.5, 51.7],[107.8, 110.0]]
     elif (case == 2):
         fname = 'openBCI_raw_2014-10-04_18-55-41_O1_Alpha.txt'
-        #t_lim_sec = [0, 85]
+        # t_lim_sec = [0, 85]
         t_lim_sec = [2, 91]
         alpha_lim_sec = [[11.5, 30.8], [53, 80.8]]
     elif (case == 3):
         fname = 'openBCI_raw_2014-10-04_19-06-13_O1_Alpha.txt'
         t_lim_sec = [2, 83]
-        #alpha_lim_sec = [58-2, 76+2]  
+        # alpha_lim_sec = [58-2, 76+2]  
         alpha_lim_sec = [[45, 76+2]]
     elif (case == 4):
         fname = 'openBCI_raw_2014-10-05_17-14-45_O1_Alpha_noCaffeine.txt'
@@ -69,8 +40,41 @@ for Ifile in range(filesToProcess.size):
         t_lim_sec = [133, 307]
         alpha_lim_sec = [[152, 167], [199, 212], [241, 264], [273.5, 295.2]]
     
+    return pname, fname, t_lim_sec, alpha_lim_sec
+   
+
+# some program constants
+fs_Hz = 250.0   # assumed sample rate for the EEG data
+f_lim_Hz = [0, 30]      # frequency limits for plotting
+
+# frequency-based processing parameters
+NFFT = 256      # pick the length of the fft
+overlap = NFFT - 50  # fixed step of 50 points
+alpha_band_Hz = np.array([7.5, 11.5])   # where to look for the alpha peak
+noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
+guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
+
+# detection rule sets to use
+# all_use_rule = np.array([1, 2, 3, 4])  # detection rules
+
+# define which files to process
+filesToProcess = np.array([1, 2, 3, 4, 5, 6])
+
+# prepare for scanning across all detection thresholds
+thresh1 = np.arange(0.0,10.0,0.1)  #threshold for alpha amplitude
+thresh2 = np.arange(0.0,6.0,0.1)  #threshold for guard amplitude, or alpha_guard_ratio
+N_true_each = np.zeros([thresh1.size, thresh2.size, filesToProcess.size])
+N_false_each = np.zeros([thresh1.size, thresh2.size, filesToProcess.size])
+N_possible_each = np.zeros([filesToProcess.size, 1])
+
+# loop over each data file
+snames =[];  # use these text labels for the legend
+for Ifile in range(filesToProcess.size):
+    print "Processing " + str(Ifile+1) + " of " + str(filesToProcess.size)  
+    snames.append('File ' + str(Ifile+1))
     
-    # %% load and process data
+    # Get the info on the desired data file
+    pname, fname, t_lim_sec, alpha_lim_sec = getFileInfo(filesToProcess[Ifile])
     
     # load and filter
     f_eeg_data_uV = loadAndFilterData(pname+fname, fs_Hz)
@@ -82,93 +86,91 @@ for Ifile in range(filesToProcess.size):
     alpha_max_uVperSqrtBin, guard_mean_uVperSqrtBin, alpha_guard_ratio = assessAlphaAndGuard(full_t_spec, freqs, full_spec_PSDperBin, alpha_band_Hz, guard_band_Hz)
     
     # process using the pre-defined detection rules
-    for Irule in range(all_use_rule.size):
-        use_rule = all_use_rule[Irule]
-        print "Using rule " + str(Irule)
+    use_rule = 2
     
-        # loop over different detection thresholds
-        N_true_foo = np.zeros([thresh1.size, thresh2.size])
-        N_false_foo = np.zeros([thresh1.size, thresh2.size])
-        bool_inTime = (full_t_spec >= t_lim_sec[0]) & (full_t_spec <= t_lim_sec[1])
-        bool_inTrueTime = np.zeros(full_t_spec.shape,dtype='bool')
-        for lim_sec in alpha_lim_sec:
-            bool_inTrueTime = bool_inTrueTime | ((full_t_spec >= lim_sec[0]) & (full_t_spec <= lim_sec[1]))    
-        bool_inTrueTime =bool_inTrueTime[bool_inTime]
-        for I1 in range(thresh1.size):
-            for I2 in range(thresh2.size):
-                #count detections
-                N_true_foo[I1,I2] , N_false_foo[I1,I2], N_possible_foo, bool_true, bool_false, bool_inTrueTime = findTrueAndFalseDetections(
-                    full_t_spec,
-                    alpha_max_uVperSqrtBin,
-                    guard_mean_uVperSqrtBin,
-                    alpha_guard_ratio,
-                    t_lim_sec,
-                    alpha_lim_sec,
-                    use_rule,
-                    thresh1[I1],
-                    thresh2[I2])
-                
-                #if (Irule==1) & (I1 == 9) & (I2==89):
-                #    print "I1, I2 = " + str(I1) + " " + str(I2) + ", N_true_foo = " + str(N_true_foo[I1,I2])
-                
-        # accumulate results for each rule, summed across files
-        #I1 = 9
-        #I2 = 89
-        #print "Repeat: I1, I2 = " + str(I1) + " " + str(I2) + ", N_true_foo = " + str(N_true_foo[I1,I2])
-        N_true[:, :, Irule] += N_true_foo
-        N_false[:, :, Irule] += N_false_foo
-        N_possible[Irule] += N_possible_foo
-        #print "Again: I1, I2, Irule = " + str(I1) + " " + str(I2) + " " + str(Irule) + ", N_true = " + str(N_true[I1,I2,Irule])
-        
+    # loop over different detection thresholds and count the detections
+    N_true_foo = np.zeros([thresh1.size, thresh2.size])
+    N_false_foo = np.zeros([thresh1.size, thresh2.size])
+    for I1 in range(thresh1.size):
+        for I2 in range(thresh2.size):
+            N_true_foo[I1,I2] , N_false_foo[I1,I2], N_possible_foo, bool_true, bool_false, bool_inTrueTime = findTrueAndFalseDetections(
+                full_t_spec,
+                alpha_max_uVperSqrtBin,
+                guard_mean_uVperSqrtBin,
+                alpha_guard_ratio,
+                t_lim_sec,
+                alpha_lim_sec,
+                use_rule,
+                thresh1[I1],
+                thresh2[I2])
+    N_true_each[:, :, Ifile] = N_true_foo
+    N_false_each[:, :, Ifile] = N_false_foo
+    N_possible_each[Ifile] = N_possible_foo
+    #print "Again: I1, I2, Irule = " + str(I1) + " " + str(I2) + " " + str(Irule) + ", N_true = " + str(N_true[I1,I2,Irule])
+    
 
-
-# %% find best N_true for each value of N_false for each rule
+# find best N_true for each value of N_false for each rule
 plot_N_false = np.arange(0,200,1)
-plot_best_N_true = np.zeros([plot_N_false.size,all_use_rule.size])
-plot_best_N_frac = np.zeros(plot_best_N_true.shape)
-plot_best_thresh1 = np.zeros(plot_best_N_true.shape)
-plot_best_thresh2 = np.zeros(plot_best_N_true.shape)
-for Irule in range(all_use_rule.size):
-    use_rule = all_use_rule[Irule]
-    N_true_foo = N_true[:, :, Irule] 
-    N_false_foo = N_false[:, :, Irule]
-    
-    for I_N_false in range(plot_N_false.size):
-        bool = (N_false_foo == plot_N_false[I_N_false]);
-        if np.any(bool):
-            
-            plot_best_N_true[I_N_false, Irule] = np.max(N_true_foo[bool])
-            
-            foo = np.copy(N_true_foo)
-            foo[~bool] = 0.0  # some small value to all values at a different N_false
-            inds = np.unravel_index(np.argmax(foo), foo.shape)
-            plot_best_thresh1[I_N_false, Irule] = thresh1[inds[0]]
-            plot_best_thresh2[I_N_false, Irule] = thresh2[inds[1]]
-            
-        # never be smaller than the previous value
-        if (I_N_false > 0):
-            if (plot_best_N_true[I_N_false-1,Irule] > plot_best_N_true[I_N_false,Irule]):
-                plot_best_N_true[I_N_false,Irule] = plot_best_N_true[I_N_false-1,Irule]
-                plot_best_thresh1[I_N_false, Irule] = plot_best_thresh1[I_N_false-1, Irule]
-                plot_best_thresh2[I_N_false, Irule] = plot_best_thresh2[I_N_false-1, Irule]
-        
-    plot_best_N_frac[:, Irule] = (plot_best_N_true[:, Irule]) / (N_possible[Irule])
+plot_best_N_true, plot_best_N_frac, plot_best_thresh1, plot_best_thresh2 = computeROC(N_true_each,
+                                                                                      N_false_each,
+                                                                                      N_possible_each,
+                                                                                      thresh1,
+                                                                                      thresh2,
+                                                                                      plot_N_false)
+                                                                                      
+## lump together the other results
+#N_true = np.sum(N_true_each,-1) # sum over the last dimension
+#N_false = np.sum(N_false_each,-1) # sum over the last dimension
+#N_possible = np.sum(N_possible_each,-1) # sum over the last dimension
+
+# %% plots
+fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
+
+# get example data at target thresh2
+targ_thresh2 = 2.5 # for rule 2
+I = np.argmin(np.abs(thresh2 - 2.5))
+targ_thresh2 = thresh2[I]
+N_true_ex = np.squeeze(N_true_each[:,I,:])
+N_false_ex = np.squeeze(N_false_each[:,I,:])
+N_true_frac_ex = np.zeros(N_true_ex.shape)
+for J in range(N_possible_each.size):
+    N_true_frac_ex[:,J] = N_true_ex[:,J]/N_possible_each[J]
+
+ax = plt.subplot(3,1,1)
+plt.plot(thresh1,N_true_frac_ex*100,linewidth=2)
+plt.xlabel('Alpha Threshold (uVrms)')
+plt.ylabel('True Frac (%)')
+plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
+plt.legend(snames,loc=3,fontsize='medium')
+plt.xlim([0, 7])
+plt.ylim([0, 100])
+targ_thresh1 = 3.5
+plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
+
+ax = plt.subplot(3,1,2)
+plt.plot(thresh1,N_false_ex,linewidth=2)
+plt.xlabel('Alpha Threshold (uVrms)')
+plt.ylabel('N False')
+plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
+plt.xlim([0, 7])
+plt.ylim([0, 50])
+plt.legend(snames,loc=3,fontsize='medium')
+targ_thresh1 = 3.5
+plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
+
+
+plt.tight_layout()
+
  
+# %% plot ROCK
 fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
 plt.subplot(311)
 plt.plot(plot_N_false, plot_best_N_frac*100, linewidth=3)
-if (all_use_rule.size < 4): 
-    plt.legend(('Rule 1','Rule 2','Rule 3'),loc=4,fontsize='medium')
-else:
-    plt.legend(('Rule 1','Rule 2','Rule 3','Rule 4'),loc=4,fontsize='medium')
-
-if (filesToProcess.size == 1):
-    plt.title(fname[12:])
-else:
-    plt.title("Number of EEG Recordings = " + str(filesToProcess.size))
+plt.legend(snames,loc=4,fontsize='medium')
+plt.title('ROC Curve for Alpha Detection\nDetect Rule = ' + str(use_rule))
 plt.xlabel('N_False')
 plt.ylabel('Fraction of Eyes-Closed Data\nCorrectly Detected (%)')
-max_N_false = 200
+max_N_false = 50
 plt.xlim([0, max_N_false])
 plt.ylim([0, 100.5])
 
