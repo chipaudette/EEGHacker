@@ -77,7 +77,7 @@ def findTrueAndFalseDetections(full_t_spec,
     bool_inTrueTime = np.zeros(full_t_spec.shape,dtype='bool')
     for lim_sec in alpha_lim_sec:
         bool_inTrueTime = bool_inTrueTime | ((full_t_spec >= lim_sec[0]) & (full_t_spec <= lim_sec[1]))    
-    bool_inTrueTime =bool_inTrueTime[bool_inTime]
+    bool_inTrueTime =bool_inTrueTime[bool_inTime] # only keep those points within t_lim_sec
  
     #all three rule sets test the alpha amplitude
     bool_alpha_thresh = (alpha_max_uVperSqrtBin > thresh1)
@@ -99,17 +99,18 @@ def findTrueAndFalseDetections(full_t_spec,
     #count true or false detections
     bool_true = bool_detect & bool_inTrueTime
     N_true = np.count_nonzero(bool_true)
-    N_possible = np.count_nonzero(bool_inTrueTime)  #number of potential True detections
+    N_eyesClosed = np.count_nonzero(bool_inTrueTime)  #number of potential True detections
     bool_false = bool_detect & ~bool_inTrueTime
     N_false = np.count_nonzero(bool_false)
+    N_eyesOpen = np.count_nonzero(~bool_inTrueTime)
     
     
-    return N_true, N_false, N_possible, bool_true, bool_false, bool_inTrueTime
+    return N_true, N_false, N_eyesClosed, N_eyesOpen, bool_true, bool_false, bool_inTrueTime
 
-def computeROC(N_true, N_false, N_possible, thresh1, thresh2, plot_N_false):
+def computeROC(N_true, N_false, N_eyesClosed, thresh1, thresh2, plot_N_false):
     n_col_out = N_true.shape[3-1]
     plot_best_N_true = np.zeros([plot_N_false.size,n_col_out])
-    plot_best_N_frac = np.zeros(plot_best_N_true.shape)
+    plot_best_N_true_frac = np.zeros(plot_best_N_true.shape)
     plot_best_thresh1 = np.zeros(plot_best_N_true.shape)
     plot_best_thresh2 = np.zeros(plot_best_N_true.shape)
     for Icol in range(n_col_out):
@@ -135,6 +136,6 @@ def computeROC(N_true, N_false, N_possible, thresh1, thresh2, plot_N_false):
                     plot_best_thresh1[I_N_false, Icol] = plot_best_thresh1[I_N_false-1, Icol]
                     plot_best_thresh2[I_N_false, Icol] = plot_best_thresh2[I_N_false-1, Icol]
             
-        plot_best_N_frac[:, Icol] = (plot_best_N_true[:, Icol]) / (N_possible[Icol])
+        plot_best_N_true_frac[:, Icol] = (plot_best_N_true[:, Icol]) / (N_eyesClosed[Icol])
         
-    return plot_best_N_true, plot_best_N_frac, plot_best_thresh1, plot_best_thresh2
+    return plot_best_N_true, plot_best_N_true_frac, plot_best_thresh1, plot_best_thresh2

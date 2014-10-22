@@ -49,7 +49,8 @@ f_lim_Hz = [0, 30]      # frequency limits for plotting
 
 # frequency-based processing parameters
 NFFT = 256      # pick the length of the fft
-overlap = NFFT - 50  # fixed step of 50 points
+FFTstep = 50
+overlap = NFFT - FFTstep  # fixed step of 50 points
 alpha_band_Hz = np.array([7.5, 11.5])   # where to look for the alpha peak
 noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
 guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
@@ -65,7 +66,8 @@ thresh1 = np.arange(0.0,10.0,0.1)  #threshold for alpha amplitude
 thresh2 = np.arange(0.0,6.0,0.1)  #threshold for guard amplitude, or alpha_guard_ratio
 N_true_each = np.zeros([thresh1.size, thresh2.size, filesToProcess.size])
 N_false_each = np.zeros([thresh1.size, thresh2.size, filesToProcess.size])
-N_possible_each = np.zeros([filesToProcess.size, 1])
+N_eyesClosed_each = np.zeros([filesToProcess.size, 1])  # number of data blocks within the "eyes closed" period
+N_eyesOpen_each = np.zeros([filesToProcess.size, 1])
 
 # loop over each data file
 snames =[];  # use these text labels for the legend
@@ -86,14 +88,14 @@ for Ifile in range(filesToProcess.size):
     alpha_max_uVperSqrtBin, guard_mean_uVperSqrtBin, alpha_guard_ratio = assessAlphaAndGuard(full_t_spec, freqs, full_spec_PSDperBin, alpha_band_Hz, guard_band_Hz)
     
     # process using the pre-defined detection rules
-    use_rule = 2
+    use_rule = 4
     
     # loop over different detection thresholds and count the detections
     N_true_foo = np.zeros([thresh1.size, thresh2.size])
     N_false_foo = np.zeros([thresh1.size, thresh2.size])
     for I1 in range(thresh1.size):
         for I2 in range(thresh2.size):
-            N_true_foo[I1,I2] , N_false_foo[I1,I2], N_possible_foo, bool_true, bool_false, bool_inTrueTime = findTrueAndFalseDetections(
+            N_true_foo[I1,I2] , N_false_foo[I1,I2], N_eyesClosed_foo, N_eyesOpen_foo, bool_true, bool_false, bool_inTrueTime = findTrueAndFalseDetections(
                 full_t_spec,
                 alpha_max_uVperSqrtBin,
                 guard_mean_uVperSqrtBin,
@@ -105,15 +107,16 @@ for Ifile in range(filesToProcess.size):
                 thresh2[I2])
     N_true_each[:, :, Ifile] = N_true_foo
     N_false_each[:, :, Ifile] = N_false_foo
-    N_possible_each[Ifile] = N_possible_foo
+    N_eyesClosed_each[Ifile] = N_eyesClosed_foo
+    N_eyesOpen_each[Ifile] = N_eyesOpen_foo
     #print "Again: I1, I2, Irule = " + str(I1) + " " + str(I2) + " " + str(Irule) + ", N_true = " + str(N_true[I1,I2,Irule])
     
 
 # find best N_true for each value of N_false for each rule
 plot_N_false = np.arange(0,200,1)
-plot_best_N_true, plot_best_N_frac, plot_best_thresh1, plot_best_thresh2 = computeROC(N_true_each,
+plot_best_N_true, plot_best_N_true_frac, plot_best_thresh1, plot_best_thresh2 = computeROC(N_true_each,
                                                                                       N_false_each,
-                                                                                      N_possible_each,
+                                                                                      N_eyesClosed_each,
                                                                                       thresh1,
                                                                                       thresh2,
                                                                                       plot_N_false)
@@ -121,23 +124,38 @@ plot_best_N_true, plot_best_N_frac, plot_best_thresh1, plot_best_thresh2 = compu
 ## lump together the other results
 #N_true = np.sum(N_true_each,-1) # sum over the last dimension
 #N_false = np.sum(N_false_each,-1) # sum over the last dimension
-#N_possible = np.sum(N_possible_each,-1) # sum over the last dimension
+#N_eyesClosed = np.sum(N_eyesClosed_each,-1) # sum over the last dimension
 
-# %% plots
-fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
-
+# %% more calculations on false alarms and such
 # get example data at target thresh2
-targ_thresh2 = 2.5 # for rule 2
+targ_thresh2 = 2.5 # for rule 2 or 4
+#targ_thresh2 = 3.5 # for rule 3
 I = np.argmin(np.abs(thresh2 - 2.5))
 targ_thresh2 = thresh2[I]
 N_true_ex = np.squeeze(N_true_each[:,I,:])
 N_false_ex = np.squeeze(N_false_each[:,I,:])
 N_true_frac_ex = np.zeros(N_true_ex.shape)
-for J in range(N_possible_each.size):
-    N_true_frac_ex[:,J] = N_true_ex[:,J]/N_possible_each[J]
+for J in range(N_eyesClosed_each.size):
+    N_true_frac_ex[:,J] = N_true_ex[:,J]/N_eyesClosed_each[J]
+    
+blocks_per_minute = fs_Hz / float(FFTstep) * 60.0
+dur_eyesOpen_minute = N_eyesOpen_each / blocks_per_minute
+N_false_ex_per_minute = N_false_ex  / (np.ones([N_false_ex.shape[0], 1])*np.transpose(dur_eyesOpen_minute))
+
+# compute false alarm rate for full data
+N_false_per_minute_each = np.zeros(N_false_each.shape)
+for Icol in range(N_false_each.shape[1]):
+    N_false_per_minute_each[:,Icol,:] = N_false_each[:,Icol,:] / (np.ones([N_false_each.shape[0], 1])*np.transpose(dur_eyesOpen_minute))
+plot_N_false_per_minute = np.zeros([plot_N_false.size, dur_eyesOpen_minute.size])
+for Irow in range(plot_N_false.size):
+    foo_num = plot_N_false[Irow]*np.ones([1, dur_eyesOpen_minute.size])
+    plot_N_false_per_minute[Irow, :] = foo_num / np.transpose(dur_eyesOpen_minute)
+
+# %% plots
+fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
 
 ax = plt.subplot(3,1,1)
-plt.plot(thresh1,N_true_frac_ex*100,linewidth=2)
+plt.plot(thresh1,N_true_frac_ex*100,linewidth=3)
 plt.xlabel('Alpha Threshold (uVrms)')
 plt.ylabel('True Frac (%)')
 plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
@@ -147,13 +165,24 @@ plt.ylim([0, 100])
 targ_thresh1 = 3.5
 plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
 
+#ax = plt.subplot(3,1,2)
+#plt.plot(thresh1,N_false_ex,linewidth=3)
+#plt.xlabel('Alpha Threshold (uVrms)')
+#plt.ylabel('N False')
+#plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
+#plt.xlim([0, 7])
+#plt.ylim([0, 50])
+#plt.legend(snames,loc=3,fontsize='medium')
+#targ_thresh1 = 3.5
+#plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
+
 ax = plt.subplot(3,1,2)
-plt.plot(thresh1,N_false_ex,linewidth=2)
+plt.plot(thresh1,N_false_ex_per_minute,linewidth=3)
 plt.xlabel('Alpha Threshold (uVrms)')
-plt.ylabel('N False')
+plt.ylabel('N False per Minute')
 plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
 plt.xlim([0, 7])
-plt.ylim([0, 50])
+plt.ylim([0, 30])
 plt.legend(snames,loc=3,fontsize='medium')
 targ_thresh1 = 3.5
 plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
@@ -165,28 +194,27 @@ plt.tight_layout()
 # %% plot ROCK
 fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
 plt.subplot(311)
-plt.plot(plot_N_false, plot_best_N_frac*100, linewidth=3)
+plt.plot(plot_N_false_per_minute, plot_best_N_true_frac*100, linewidth=3)
 plt.legend(snames,loc=4,fontsize='medium')
 plt.title('ROC Curve for Alpha Detection\nDetect Rule = ' + str(use_rule))
-plt.xlabel('N_False')
+plt.xlabel('N_False per Minute')
 plt.ylabel('Fraction of Eyes-Closed Data\nCorrectly Detected (%)')
-max_N_false = 50
+max_N_false = 30
 plt.xlim([0, max_N_false])
 plt.ylim([0, 100.5])
 
 plt.subplot(312)
-plt.plot(plot_N_false, plot_best_thresh1, linewidth=3)
-plt.xlabel('N_False')
+plt.plot(plot_N_false_per_minute, plot_best_thresh1, linewidth=3)
+plt.xlabel('N_False per Minute')
 plt.ylabel('Best Alpha Threshold\n(uVrms)')
 plt.xlim([0, max_N_false])
 plt.ylim([0, 5])
 
 plt.subplot(313)
-plt.plot(plot_N_false, plot_best_thresh2, linewidth=3)
-plt.xlabel('N_False')
+plt.plot(plot_N_false_per_minute, plot_best_thresh2, linewidth=3)
+plt.xlabel('N_False per Minute')
 plt.ylabel('Best Thresh Rule 2\n(uVrms or Ratio)')
 plt.xlim([0, max_N_false])
 plt.ylim([0, 5])
-
 
 plt.tight_layout()
