@@ -108,14 +108,25 @@ def findTrueAndFalseDetections(full_t_spec,
     return N_true, N_false, N_eyesClosed, N_eyesOpen, bool_true, bool_false, bool_inTrueTime
 
 def computeROC(N_true, N_false, N_eyesClosed, thresh1, thresh2, plot_N_false):
-    n_col_out = N_true.shape[3-1]
+    shape = N_true.shape
+    if (len(shape)==3):
+        n_col_out = shape[3-1]
+        use_third_dim = 1
+    else:
+        n_col_out = 1
+        use_third_dim = 0
+            
     plot_best_N_true = np.zeros([plot_N_false.size,n_col_out])
     plot_best_N_true_frac = np.zeros(plot_best_N_true.shape)
     plot_best_thresh1 = np.zeros(plot_best_N_true.shape)
     plot_best_thresh2 = np.zeros(plot_best_N_true.shape)
     for Icol in range(n_col_out):
-        N_true_foo = N_true[:, :, Icol] 
-        N_false_foo = N_false[:, :, Icol]
+        if use_third_dim:
+            N_true_foo = N_true[:, :, Icol] 
+            N_false_foo = N_false[:, :, Icol]
+        else:
+            N_true_foo = N_true 
+            N_false_foo = N_false           
         
         for I_N_false in range(plot_N_false.size):
             bool = (N_false_foo == plot_N_false[I_N_false]);
@@ -135,7 +146,11 @@ def computeROC(N_true, N_false, N_eyesClosed, thresh1, thresh2, plot_N_false):
                     plot_best_N_true[I_N_false,Icol] = plot_best_N_true[I_N_false-1,Icol]
                     plot_best_thresh1[I_N_false, Icol] = plot_best_thresh1[I_N_false-1, Icol]
                     plot_best_thresh2[I_N_false, Icol] = plot_best_thresh2[I_N_false-1, Icol]
-            
-        plot_best_N_true_frac[:, Icol] = (plot_best_N_true[:, Icol]) / (N_eyesClosed[Icol])
+        
+        if (use_third_dim):
+            N_total = N_eyesClosed[Icol]
+        else:
+            N_total = N_eyesClosed
+        plot_best_N_true_frac[:, Icol] = (plot_best_N_true[:, Icol]) / N_total
         
     return plot_best_N_true, plot_best_N_true_frac, plot_best_thresh1, plot_best_thresh2

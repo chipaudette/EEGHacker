@@ -88,7 +88,7 @@ for Ifile in range(filesToProcess.size):
     alpha_max_uVperSqrtBin, guard_mean_uVperSqrtBin, alpha_guard_ratio = assessAlphaAndGuard(full_t_spec, freqs, full_spec_PSDperBin, alpha_band_Hz, guard_band_Hz)
     
     # process using the pre-defined detection rules
-    use_rule = 4
+    use_rule = 2
     
     # loop over different detection thresholds and count the detections
     N_true_foo = np.zeros([thresh1.size, thresh2.size])
@@ -121,16 +121,28 @@ plot_best_N_true, plot_best_N_true_frac, plot_best_thresh1, plot_best_thresh2 = 
                                                                                       thresh2,
                                                                                       plot_N_false)
                                                                                       
-## lump together the other results
-#N_true = np.sum(N_true_each,-1) # sum over the last dimension
-#N_false = np.sum(N_false_each,-1) # sum over the last dimension
-#N_eyesClosed = np.sum(N_eyesClosed_each,-1) # sum over the last dimension
+# lump together the other results
+N_true_sum = np.sum(N_true_each,-1) # sum over the last dimension
+N_false_sum = np.sum(N_false_each,-1) # sum over the last dimension
+N_eyesClosed_sum = np.sum(N_eyesClosed_each) # sum over the last dimension
+N_eyesOpen_sum = np.sum(N_eyesOpen_each) # sum over the last dimension
+plot_best_N_sum_true, plot_best_N_true_sum_frac, plot_best_sum_thresh1, plot_best_sum_thresh2 = computeROC(N_true_sum,
+                                                                                      N_false_sum,
+                                                                                      N_eyesClosed_sum,
+                                                                                      thresh1,
+                                                                                      thresh2,
+                                                                                      plot_N_false)
 
 # %% more calculations on false alarms and such
 # get example data at target thresh2
-targ_thresh2 = 2.5 # for rule 2 or 4
-#targ_thresh2 = 3.5 # for rule 3
-I = np.argmin(np.abs(thresh2 - 2.5))
+if 0:
+    targ_thresh1 = 3.5
+    targ_thresh2 = 2.5 # for rule 2 or 4
+    I = np.argmin(np.abs(thresh2 - targ_thresh2))
+else:
+    targ_thresh1 = 3.54
+    targ_thresh2 = 1.63 # for rule 2 or 4
+I = np.argmin(np.abs(thresh2 - targ_thresh2))
 targ_thresh2 = thresh2[I]
 N_true_ex = np.squeeze(N_true_each[:,I,:])
 N_false_ex = np.squeeze(N_false_each[:,I,:])
@@ -142,6 +154,8 @@ blocks_per_minute = fs_Hz / float(FFTstep) * 60.0
 dur_eyesOpen_minute = N_eyesOpen_each / blocks_per_minute
 N_false_ex_per_minute = N_false_ex  / (np.ones([N_false_ex.shape[0], 1])*np.transpose(dur_eyesOpen_minute))
 
+
+
 # compute false alarm rate for full data
 N_false_per_minute_each = np.zeros(N_false_each.shape)
 for Icol in range(N_false_each.shape[1]):
@@ -151,70 +165,107 @@ for Irow in range(plot_N_false.size):
     foo_num = plot_N_false[Irow]*np.ones([1, dur_eyesOpen_minute.size])
     plot_N_false_per_minute[Irow, :] = foo_num / np.transpose(dur_eyesOpen_minute)
 
-# %% plots
-fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
+N_false_per_minute_sum = N_false_sum / N_eyesOpen_sum
+dur_eyesOpen_sum_minute = N_eyesOpen_sum / blocks_per_minute
+plot_N_false_sum_per_minute = plot_N_false / dur_eyesOpen_sum_minute
 
-ax = plt.subplot(3,1,1)
+# %% plots
+fig = plt.figure(figsize=(10.5,4.25))  # make new figure, set size in inches
+
+ax = plt.subplot(1,2,1)
 plt.plot(thresh1,N_true_frac_ex*100,linewidth=3)
 plt.xlabel('Alpha Threshold (uVrms)')
-plt.ylabel('True Frac (%)')
-plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
+plt.ylabel('Fraction of Correct Detections (%)')
+plt.title('True Positive')
 plt.legend(snames,loc=3,fontsize='medium')
 plt.xlim([0, 7])
 plt.ylim([0, 100])
-targ_thresh1 = 3.5
 plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
 
-#ax = plt.subplot(3,1,2)
-#plt.plot(thresh1,N_false_ex,linewidth=3)
-#plt.xlabel('Alpha Threshold (uVrms)')
-#plt.ylabel('N False')
-#plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
-#plt.xlim([0, 7])
-#plt.ylim([0, 50])
-#plt.legend(snames,loc=3,fontsize='medium')
-#targ_thresh1 = 3.5
-#plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
+ax.text(1-0.025, 0.95,
+         "Detect Rule = " + str(use_rule) + "\nThresh2 = " + str(targ_thresh2),
+         transform=ax.transAxes,
+         verticalalignment='top',
+         horizontalalignment='right',
+         backgroundcolor='w')
 
-ax = plt.subplot(3,1,2)
+
+ax = plt.subplot(1,2,2)
 plt.plot(thresh1,N_false_ex_per_minute,linewidth=3)
 plt.xlabel('Alpha Threshold (uVrms)')
-plt.ylabel('N False per Minute')
-plt.title('Detect Rule = ' + str(use_rule) + ', Thresh2 = ' + str(targ_thresh2))
+plt.ylabel('Incorrect Detections per Minute')
+plt.title('False Positive')
 plt.xlim([0, 7])
-plt.ylim([0, 30])
+plt.ylim([0, 40])
 plt.legend(snames,loc=3,fontsize='medium')
 targ_thresh1 = 3.5
 plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
 
+ax.text(1-0.025, 0.95,
+         "Detect Rule = " + str(use_rule) + "\nThresh2 = " + str(targ_thresh2),
+         transform=ax.transAxes,
+         verticalalignment='top',
+         horizontalalignment='right',
+         backgroundcolor='w')
 
 plt.tight_layout()
 
  
-# %% plot ROCK
-fig = plt.figure(figsize=(6.5,9))  # make new figure, set size in inches
-plt.subplot(311)
-plt.plot(plot_N_false_per_minute, plot_best_N_true_frac*100, linewidth=3)
-plt.legend(snames,loc=4,fontsize='medium')
-plt.title('ROC Curve for Alpha Detection\nDetect Rule = ' + str(use_rule))
-plt.xlabel('N_False per Minute')
-plt.ylabel('Fraction of Eyes-Closed Data\nCorrectly Detected (%)')
-max_N_false = 30
-plt.xlim([0, max_N_false])
-plt.ylim([0, 100.5])
-
-plt.subplot(312)
-plt.plot(plot_N_false_per_minute, plot_best_thresh1, linewidth=3)
-plt.xlabel('N_False per Minute')
-plt.ylabel('Best Alpha Threshold\n(uVrms)')
-plt.xlim([0, max_N_false])
-plt.ylim([0, 5])
-
-plt.subplot(313)
-plt.plot(plot_N_false_per_minute, plot_best_thresh2, linewidth=3)
-plt.xlabel('N_False per Minute')
-plt.ylabel('Best Thresh Rule 2\n(uVrms or Ratio)')
-plt.xlim([0, max_N_false])
-plt.ylim([0, 5])
-
-plt.tight_layout()
+# %% plot ROC         
+      
+for Iplot in range(2):
+    if Iplot==0:
+        foo_best_N_true_frac = plot_best_N_true_frac
+        foo_N_false_per_minute = plot_N_false_per_minute
+        foo_best_thresh1 = plot_best_thresh1
+        foo_best_thresh2 = plot_best_thresh2
+        lt = snames
+    elif Iplot==1:
+        foo_best_N_true_frac = plot_best_N_true_sum_frac
+        foo_N_false_per_minute = plot_N_false_sum_per_minute
+        foo_best_thresh1 = plot_best_sum_thresh1
+        foo_best_thresh2 = plot_best_sum_thresh2
+        lt = ["All Data"]
+         
+         
+    fig = plt.figure(figsize=(10.5,4.25*1.9))  # make new figure, set size in inches
+    
+    ax = plt.subplot(2,2,1)
+    plt.plot(foo_N_false_per_minute, foo_best_N_true_frac*100, linewidth=3)
+    plt.legend(lt,loc=4,fontsize='medium')
+    plt.title('ROC Curve for Alpha Detection')
+    plt.xlabel('Incorrect Detections per Minute')
+    plt.ylabel('Fraction of Correct Detections (%)')
+    max_N_false = 20
+    plt.xlim([0, max_N_false])
+    plt.ylim([0, 100.5])
+    
+    ax.text(0.025, 0.05,
+         "Detect Rule = " + str(use_rule),
+         transform=ax.transAxes,
+         verticalalignment='bottom',
+         horizontalalignment='left',
+         backgroundcolor='w')
+    
+    
+    
+    plt.subplot(2,2,3)
+    plt.plot(foo_N_false_per_minute, foo_best_thresh1, linewidth=3)
+    plt.xlabel('Incorrect Detections per Minute')
+    plt.ylabel('Threshold (uVrms)')
+    plt.title('Best Alpha Threshold')
+    plt.xlim([0, max_N_false])
+    plt.ylim([0, 5])
+    
+    plt.subplot(2,2,4)
+    plt.plot(foo_N_false_per_minute, foo_best_thresh2, linewidth=3)
+    plt.xlabel('Incorrect Detections per Minute')
+    plt.ylabel('Threshold (uVrms)')
+    plt.title('Best Guard Threshold (uVrms)')
+    if (use_rule == 3):
+        plt.ylabel('Ratio (uVrms/uVrms)')
+        plt.title('Best Alpha/Guard Ratio')
+    plt.xlim([0, max_N_false])
+    plt.ylim([0, 5])
+    
+    plt.tight_layout()
