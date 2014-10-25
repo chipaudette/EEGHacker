@@ -135,13 +135,25 @@ plot_best_N_sum_true, plot_best_N_true_sum_frac, plot_best_sum_thresh1, plot_bes
 
 # %% more calculations on false alarms and such
 # get example data at target thresh2
-if 0:
-    targ_thresh1 = 3.5
-    targ_thresh2 = 2.5 # for rule 2 or 4
+if 1:
+    targ_thresh1 = 3.75
+    targ_thresh2 = 2.55 # for rule 2 or 4
     I = np.argmin(np.abs(thresh2 - targ_thresh2))
 else:
-    targ_thresh1 = 3.54
-    targ_thresh2 = 1.63 # for rule 2 or 4
+    if (NFFT==256):
+        if use_rule == 2:
+            #rule 2 for 1.0 false alarm per minute
+            targ_thresh1 = 3.8
+            targ_thresh2 = 1.6 # for rule 2 or 4
+        elif use_rule == 3:
+            #rule 3 for 1.0 false alarm per minute
+            targ_thresh1 = 3.4
+            targ_thresh2 = 3.4
+    elif (NFFT==512):
+        #rule 2 for 1.0 false alarm per minute
+        targ_thresh1 = 2.9
+        targ_thresh2 = 1.0
+        
 I = np.argmin(np.abs(thresh2 - targ_thresh2))
 targ_thresh2 = thresh2[I]
 N_true_ex = np.squeeze(N_true_each[:,I,:])
@@ -168,6 +180,15 @@ for Irow in range(plot_N_false.size):
 N_false_per_minute_sum = N_false_sum / N_eyesOpen_sum
 dur_eyesOpen_sum_minute = N_eyesOpen_sum / blocks_per_minute
 plot_N_false_sum_per_minute = plot_N_false / dur_eyesOpen_sum_minute
+
+# find best threshold values
+targ_N_false_per_minute = 1.0
+ind = np.argmin(np.abs(plot_N_false_sum_per_minute-targ_N_false_per_minute))
+best_thresh1 = plot_best_sum_thresh1[ind]
+best_thresh2 = plot_best_sum_thresh2[ind]
+print "For targ_N_false_per_minute = " + str(targ_N_false_per_minute)
+print "   : best thresh1 = " + str(best_thresh1)
+print "   : best thresh2 = " + str(best_thresh2)
 
 # %% plots
 fig = plt.figure(figsize=(10.5,4.25))  # make new figure, set size in inches
@@ -198,7 +219,6 @@ plt.title('False Positive')
 plt.xlim([0, 7])
 plt.ylim([0, 40])
 plt.legend(snames,loc=3,fontsize='medium')
-targ_thresh1 = 3.5
 plt.plot(targ_thresh1*np.array([1, 1]),ax.get_ylim(),'k--',linewidth=2)
 
 ax.text(1-0.025, 0.95,
@@ -240,16 +260,23 @@ for Iplot in range(2):
     plt.xlim([0, max_N_false])
     plt.ylim([0, 100.5])
     
-    ax.text(0.025, 0.05,
+    ax.text(1-0.025, 1-0.025,
          "Detect Rule = " + str(use_rule),
          transform=ax.transAxes,
+         verticalalignment='top',
+         horizontalalignment='right',
+         backgroundcolor='w')
+    
+    plt.plot(targ_N_false_per_minute*np.array([1.0, 1.0]), ax.get_ylim(), 'k--',linewidth=2)
+    yl = ax.get_ylim()
+    xl = ax.get_xlim()
+    ax.text(targ_N_false_per_minute+0.02*(xl[1]-xl[0]), yl[0]+0.05*(yl[1]-yl[0]),
+         "Target " + str(targ_N_false_per_minute) + "\nper Minute",
          verticalalignment='bottom',
          horizontalalignment='left',
          backgroundcolor='w')
     
-    
-    
-    plt.subplot(2,2,3)
+    ax=plt.subplot(2,2,3)
     plt.plot(foo_N_false_per_minute, foo_best_thresh1, linewidth=3)
     plt.xlabel('Incorrect Detections per Minute')
     plt.ylabel('Threshold (uVrms)')
@@ -257,7 +284,18 @@ for Iplot in range(2):
     plt.xlim([0, max_N_false])
     plt.ylim([0, 5])
     
-    plt.subplot(2,2,4)
+    ax.text(1-0.025, 1-0.025,
+         "Detect Rule = " + str(use_rule),
+         transform=ax.transAxes,
+         verticalalignment='top',
+         horizontalalignment='right',
+         backgroundcolor='w')    
+    
+    plt.plot(targ_N_false_per_minute*np.array([1.0, 1.0]), ax.get_ylim(), 'k--',linewidth=2)
+    if Iplot==1:
+        plt.plot(targ_N_false_per_minute,best_thresh1,'ko',linewidth=2,markeredgewidth=2,markersize=8)
+    
+    ax=plt.subplot(2,2,4)
     plt.plot(foo_N_false_per_minute, foo_best_thresh2, linewidth=3)
     plt.xlabel('Incorrect Detections per Minute')
     plt.ylabel('Threshold (uVrms)')
@@ -268,4 +306,15 @@ for Iplot in range(2):
     plt.xlim([0, max_N_false])
     plt.ylim([0, 5])
     
+    ax.text(1-0.025, 1-0.025,
+         "Detect Rule = " + str(use_rule),
+         transform=ax.transAxes,
+         verticalalignment='top',
+         horizontalalignment='right',
+         backgroundcolor='w')
+    
+    plt.plot(targ_N_false_per_minute*np.array([1.0, 1.0]), ax.get_ylim(), 'k--',linewidth=2)
+    if Iplot==1:
+        plt.plot(targ_N_false_per_minute,best_thresh2,'ko',linewidth=2,markeredgewidth=2,markersize=8)
+
     plt.tight_layout()
