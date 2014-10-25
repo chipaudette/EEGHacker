@@ -16,10 +16,16 @@ noise_band_Hz = np.array([14.0, 20.0])  # was 20-40 Hz
 guard_band_Hz = np.array([[3.0, 6.5], [13.0, 18.0]])
 
 # detectection parameters
-use_detect_rules = 2    # 1 = Alpha only, 2 = Alpha and Guard Thres, 3 = Alpha and Ratio
-det_thresh_uV = 3.5     # 3.5 for NFFT = 256, 2.5 for NFFT = 512
-guard_thresh_uV = 2.5   # 2.5
 det_thresh_ratio = 3.5
+use_detect_rules = 2    # 1 = Alpha only, 2 = Alpha and Guard Thres, 3 = Alpha and Ratio
+if 0:
+    det_thresh_uV = 3.5     # 3.5 for NFFT = 256, 2.5 for NFFT = 512
+    guard_thresh_uV = 2.5   # 2.5
+else:
+    det_thresh_uV = 3.8     # 3.5 for NFFT = 256, 2.5 for NFFT = 512
+    guard_thresh_uV = 1.6   # 2.5
+    
+
 
 #if (NFFT < 512):
 #    if 0:
@@ -47,7 +53,7 @@ alpha_lim_sec = [[0, 0]]  # default
 t_other_sec = [0, 0]    # default
 
 # define which data to load
-case = 4  # choose which case to load
+case = 4 # choose which case to load
 pname = 'SavedData/'
 if (case == 1):
     fname = 'openBCI_raw_2014-10-04_18-50-20_RightForehead_countebackby3.txt'

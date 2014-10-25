@@ -135,7 +135,7 @@ plot_best_N_sum_true, plot_best_N_true_sum_frac, plot_best_sum_thresh1, plot_bes
 
 # %% more calculations on false alarms and such
 # get example data at target thresh2
-if 1:
+if 0:
     targ_thresh1 = 3.75
     targ_thresh2 = 2.55 # for rule 2 or 4
     I = np.argmin(np.abs(thresh2 - targ_thresh2))
