@@ -6,6 +6,8 @@
 openBCI*.txt
 OpenBCI_GUI\OpenBCI*.jpg
 openBCI*.wav
+*\.ipynb_checkpoints
+*\.ipynb_checkpoints\*
 
 Processing\OBCI_V3_Debugging\OBCI_Verify_PacketCount\OBCI_packetCount_verification\*
 Processing\OBCI_V3_Debugging\OpenBCI_GUI\SavedData\*
