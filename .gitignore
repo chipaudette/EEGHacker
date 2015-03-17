@@ -3,6 +3,8 @@
 *.asv
 *.avi
 *.mov
+*.mat
+*.asc
 openBCI*.txt
 OpenBCI_GUI\OpenBCI*.jpg
 openBCI*.wav
